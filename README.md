@@ -47,6 +47,34 @@ stored in your browser.
 4. Restart `npm run dev`. The sidebar badge turns green ("Supabase connected")
    and all reads/writes go to your database.
 
+## Deploy on Railway
+
+The repo is Railway-ready. Railway builds with Nixpacks and serves the static
+`dist/` build via [`serve`](https://www.npmjs.com/package/serve).
+
+1. In Railway: **New Project → Deploy from GitHub repo →** select
+   `cyberking-coder/rohan_journal` (branch `main`).
+2. Railway auto-detects the config in [`railway.json`](railway.json):
+   - Build: `npm run build`
+   - Start: `npm start` → `serve -s dist -l $PORT`
+3. (Optional) Add your Supabase keys under **Variables**:
+   `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. These are read at
+   **build time**, so trigger a redeploy after setting them.
+4. Under **Settings → Networking**, click **Generate Domain** to get a public URL.
+
+The app is served at the domain root (`/`), so no base-path config is needed —
+`vite.config.js` only switches to the `/rohan_journal/` sub-path when
+`DEPLOY_TARGET=gh-pages` (used by the optional GitHub Pages workflow).
+
+> Note: `serve -s` handles SPA routing (any path falls back to `index.html`).
+
+## Deploy on GitHub Pages (optional)
+
+A workflow at [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
+builds with `DEPLOY_TARGET=gh-pages` and publishes to Pages. Enable
+**Settings → Pages → Source: GitHub Actions** and allow `main` under the
+`github-pages` environment's deployment branches.
+
 ## Tech stack
 
 React + Vite · Framer Motion · Recharts · Supabase JS.
