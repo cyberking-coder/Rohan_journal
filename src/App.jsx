@@ -5,12 +5,23 @@ import TradeForm from './components/TradeForm'
 import Dashboard from './pages/Dashboard'
 import Journal from './pages/Journal'
 import Analysis from './pages/Analysis'
+import Login from './pages/Login'
 import { useTrades } from './lib/useTrades'
+import { useAuth } from './lib/AuthContext'
 
 export default function App() {
+  const { user, loading: authLoading, requiresAuth } = useAuth()
+
+  if (authLoading) return <FullScreenLoader />
+  if (requiresAuth && !user) return <Login />
+
+  return <Journalized userId={user?.id ?? null} />
+}
+
+function Journalized({ userId }) {
   const [page, setPage] = useState('dashboard')
   const [formOpen, setFormOpen] = useState(false)
-  const { trades, loading, addTrade, deleteTrade, isSupabaseConfigured } = useTrades()
+  const { trades, loading, addTrade, deleteTrade, isSupabaseConfigured } = useTrades(userId)
 
   const openForm = () => setFormOpen(true)
 
@@ -36,6 +47,18 @@ export default function App() {
 
       <TradeForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={addTrade} />
     </Shell>
+  )
+}
+
+function FullScreenLoader() {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 0.9, ease: 'linear' }}
+        style={{ width: 34, height: 34, borderRadius: '50%', border: '3px solid #1c2523', borderTopColor: 'var(--mint)' }}
+      />
+    </div>
   )
 }
 

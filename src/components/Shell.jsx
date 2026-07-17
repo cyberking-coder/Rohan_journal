@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { useAuth } from '../lib/AuthContext'
 
 const NAV = [
   { key: 'dashboard', label: 'Dashboard', icon: '◈' },
@@ -75,6 +76,7 @@ export default function Shell({ active, onNav, onAdd, isDemo, children }) {
             <span style={{ color: isDemo ? 'var(--amber)' : 'var(--mint)' }}>●</span>{' '}
             {isDemo ? 'Demo data (local)' : 'Supabase connected'}
           </div>
+          <UserCard />
         </div>
       </aside>
 
@@ -89,6 +91,40 @@ export default function Shell({ active, onNav, onAdd, isDemo, children }) {
           .main { padding: 18px 16px 60px; }
         }
       `}</style>
+    </div>
+  )
+}
+
+function UserCard() {
+  const { user, signOut, requiresAuth } = useAuth()
+  if (!requiresAuth || !user) return null
+
+  const meta = user.user_metadata || {}
+  const name = meta.full_name || meta.name || user.email?.split('@')[0] || 'Trader'
+  const email = user.email || ''
+  const avatar = meta.avatar_url || meta.picture
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+      border: '1px solid var(--stroke)', borderRadius: 12, background: 'var(--card)',
+    }}>
+      {avatar ? (
+        <img src={avatar} alt="" referrerPolicy="no-referrer"
+          style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }} />
+      ) : (
+        <div style={{
+          width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'linear-gradient(140deg,#2fd48a,#128a56)', color: '#04140d', fontWeight: 700, fontSize: 13,
+        }}>{name[0]?.toUpperCase()}</div>
+      )}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+        <div style={{ fontSize: 10.5, color: 'var(--text-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{email}</div>
+      </div>
+      <button onClick={signOut} title="Sign out"
+        style={{ color: 'var(--text-3)', fontSize: 16, padding: 4, flexShrink: 0 }}>⎋</button>
     </div>
   )
 }

@@ -18,7 +18,7 @@ function saveLocal(trades) {
   try { localStorage.setItem(LS_KEY, JSON.stringify(trades)) } catch { /* ignore */ }
 }
 
-export function useTrades() {
+export function useTrades(userId = null) {
   const [trades, setTrades] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -31,6 +31,8 @@ export function useTrades() {
       setLoading(false)
       return
     }
+    // Row Level Security scopes rows to the signed-in user; the client
+    // query just orders them.
     const { data, error } = await supabase
       .from(TABLE)
       .select('*')
@@ -43,7 +45,7 @@ export function useTrades() {
       setError(null)
     }
     setLoading(false)
-  }, [])
+  }, [userId])
 
   useEffect(() => { fetchTrades() }, [fetchTrades])
 
@@ -57,12 +59,13 @@ export function useTrades() {
       })
       return { data: record, error: null }
     }
-    const { data, error } = await supabase.from(TABLE).insert(trade).select().single()
+    const payload = userId ? { ...trade, user_id: userId } : trade
+    const { data, error } = await supabase.from(TABLE).insert(payload).select().single()
     if (!error && data) {
       setTrades((prev) => [...prev, data].sort((a, b) => new Date(a.traded_at) - new Date(b.traded_at)))
     }
     return { data, error }
-  }, [])
+  }, [userId])
 
   const deleteTrade = useCallback(async (id) => {
     if (!isSupabaseConfigured) {
