@@ -1,4 +1,4 @@
-# TRADER BRAG — Premium Trading Journal
+# Forex Greek Journal — Premium Trading Journal
 
 A dark, premium trading journal with a mint-on-charcoal design language, smooth
 animations, and Supabase-backed persistence. Track trades manually, review your

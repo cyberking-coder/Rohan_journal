@@ -14,12 +14,12 @@ export function Logo() {
         width: 36, height: 36, borderRadius: 10, flexShrink: 0,
         background: 'linear-gradient(140deg, #2fd48a, #128a56)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: 'var(--display)', fontWeight: 800, color: '#04140d', fontSize: 18,
+        fontFamily: 'var(--display)', fontWeight: 800, color: '#04140d', fontSize: 20,
         boxShadow: '0 6px 20px -6px rgba(47,212,138,0.6)',
-      }}>T</div>
-      <div style={{ lineHeight: 1.05, fontFamily: 'var(--display)', fontWeight: 800, fontSize: 16, letterSpacing: '0.02em' }}>
-        <div>TRADER</div>
-        <div className="grad-text">BRAG</div>
+      }}>λ</div>
+      <div style={{ lineHeight: 1.05, fontFamily: 'var(--display)', fontWeight: 800, fontSize: 15.5, letterSpacing: '0.02em' }}>
+        <div>FOREX GREEK</div>
+        <div className="grad-text">JOURNAL</div>
       </div>
     </div>
   )

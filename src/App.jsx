@@ -45,7 +45,7 @@ function Journalized({ userId }) {
         </AnimatePresence>
       )}
 
-      <TradeForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={addTrade} />
+      <TradeForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={addTrade} userId={userId} />
     </Shell>
   )
 }

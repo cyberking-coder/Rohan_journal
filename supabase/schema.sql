@@ -16,11 +16,16 @@ create table if not exists public.trades (
   pnl         numeric not null default 0,   -- gross P&L in account currency
   fees        numeric not null default 0,
   rr          numeric,                       -- realised risk : reward
-  rating      smallint check (rating between 1 and 5),
-  notes       text,
-  traded_at   timestamptz not null default now(),
-  created_at  timestamptz not null default now()
+  rating         smallint check (rating between 1 and 5),
+  notes          text,
+  screenshot_url text,                          -- public URL of the chart screenshot
+  traded_at      timestamptz not null default now(),
+  created_at     timestamptz not null default now()
 );
+
+-- If the table already exists from an earlier version, add the new column:
+alter table public.trades add column if not exists screenshot_url text;
+alter table public.trades alter column qty type numeric;
 
 create index if not exists trades_traded_at_idx on public.trades (traded_at desc);
 create index if not exists trades_user_idx on public.trades (user_id);

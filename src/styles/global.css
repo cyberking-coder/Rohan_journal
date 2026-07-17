@@ -53,11 +53,38 @@ a { color: inherit; text-decoration: none; }
 .neg { color: var(--red); }
 
 .card {
+  position: relative;
+  isolation: isolate;
   background: linear-gradient(180deg, var(--card-2), var(--card));
   border: 1px solid var(--stroke);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  transition: border-color 0.25s ease, box-shadow 0.3s ease, transform 0.2s ease;
 }
+
+/* Cursor-tracking mint spotlight + border glow, matching the theme */
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  background: radial-gradient(
+    460px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(47, 212, 138, 0.14),
+    transparent 45%
+  );
+}
+
+.card:hover {
+  border-color: rgba(47, 212, 138, 0.34);
+  box-shadow: var(--shadow), 0 0 0 1px rgba(47, 212, 138, 0.12),
+    0 14px 46px -14px rgba(47, 212, 138, 0.28);
+}
+
+.card:hover::before { opacity: 1; }
 
 .eyebrow {
   font-size: 11px;

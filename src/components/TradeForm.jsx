@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { StarRating } from './widgets'
+import { uploadScreenshot } from '../lib/storage'
 
 const SESSIONS = ['London', 'New York', 'Asia', 'Overlap']
 const STRATEGIES = ['Breakout', 'FBD', 'Gapper', 'Reversal', 'Trend Pullback']
@@ -11,14 +12,24 @@ const field = {
 }
 const labelStyle = { fontSize: 11.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6, display: 'block' }
 
-function Labeled({ label, children }) {
-  return <div><label style={labelStyle}>{label}</label>{children}</div>
+function Labeled({ label, hint, children }) {
+  return (
+    <div>
+      <label style={labelStyle}>{label}{hint && <span style={{ textTransform: 'none', letterSpacing: 0, color: 'var(--mint)', marginLeft: 6, fontWeight: 500 }}>{hint}</span>}</label>
+      {children}
+    </div>
+  )
 }
 
-export default function TradeForm({ open, onClose, onSubmit }) {
+export default function TradeForm({ open, onClose, onSubmit, userId }) {
   const [form, setForm] = useState(blank())
   const [rating, setRating] = useState(3)
   const [saving, setSaving] = useState(false)
+  const [pnlTouched, setPnlTouched] = useState(false)
+  const [autoCalc, setAutoCalc] = useState(false)
+  const [file, setFile] = useState(null)
+  const [preview, setPreview] = useState(null)
+  const [err, setErr] = useState(null)
 
   function blank() {
     return {
@@ -30,29 +41,72 @@ export default function TradeForm({ open, onClose, onSubmit }) {
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
+  // Auto-calculate P&L from entry/exit/qty/side unless the user typed one in.
+  useEffect(() => {
+    if (pnlTouched) return
+    const e = parseFloat(form.entry)
+    const x = parseFloat(form.exit)
+    const q = parseInt(form.qty) || 1
+    if (!isFinite(e) || !isFinite(x)) { setAutoCalc(false); return }
+    const gross = (form.side === 'Long' ? x - e : e - x) * q
+    setForm((f) => ({ ...f, pnl: (Math.round(gross * 100) / 100).toString() }))
+    setAutoCalc(true)
+  }, [form.entry, form.exit, form.qty, form.side, pnlTouched])
+
+  function onPickFile(e) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (!f.type.startsWith('image/')) { setErr('Please choose an image file.'); return }
+    if (f.size > 6 * 1024 * 1024) { setErr('Image must be under 6 MB.'); return }
+    setErr(null)
+    setFile(f)
+    setPreview(URL.createObjectURL(f))
+  }
+
+  function removeFile() {
+    setFile(null)
+    if (preview) URL.revokeObjectURL(preview)
+    setPreview(null)
+  }
+
+  function resetAll() {
+    setForm(blank()); setRating(3); setPnlTouched(false); setAutoCalc(false)
+    removeFile(); setErr(null)
+  }
+
   async function submit(e) {
     e.preventDefault()
     setSaving(true)
-    const record = {
-      symbol: form.symbol.toUpperCase() || 'N/A',
-      side: form.side,
-      strategy: form.strategy,
-      session: form.session,
-      entry: parseFloat(form.entry) || 0,
-      exit: parseFloat(form.exit) || 0,
-      qty: parseInt(form.qty) || 1,
-      pnl: parseFloat(form.pnl) || 0,
-      fees: parseFloat(form.fees) || 0,
-      rr: parseFloat(form.rr) || 0,
-      rating,
-      notes: form.notes,
-      traded_at: new Date(form.traded_at).toISOString(),
+    setErr(null)
+    try {
+      let screenshot_url = null
+      if (file) screenshot_url = await uploadScreenshot(file, userId)
+
+      const record = {
+        symbol: form.symbol.toUpperCase() || 'N/A',
+        side: form.side,
+        strategy: form.strategy,
+        session: form.session,
+        entry: parseFloat(form.entry) || 0,
+        exit: parseFloat(form.exit) || 0,
+        qty: parseInt(form.qty) || 1,
+        pnl: parseFloat(form.pnl) || 0,
+        fees: parseFloat(form.fees) || 0,
+        rr: parseFloat(form.rr) || 0,
+        rating,
+        notes: form.notes,
+        screenshot_url,
+        traded_at: new Date(form.traded_at).toISOString(),
+      }
+      const res = await onSubmit(record)
+      if (res?.error) throw new Error(res.error.message || 'Could not save trade')
+      resetAll()
+      onClose()
+    } catch (e2) {
+      setErr(e2.message || 'Something went wrong')
+    } finally {
+      setSaving(false)
     }
-    await onSubmit(record)
-    setSaving(false)
-    setForm(blank())
-    setRating(3)
-    onClose()
   }
 
   return (
@@ -75,7 +129,7 @@ export default function TradeForm({ open, onClose, onSubmit }) {
             exit={{ opacity: 0, y: 20, scale: 0.98 }}
             transition={{ ease: [0.22, 1, 0.36, 1], duration: 0.35 }}
             className="card"
-            style={{ width: 'min(620px, 100%)', maxHeight: '90vh', overflowY: 'auto', padding: 26 }}
+            style={{ width: 'min(640px, 100%)', maxHeight: '92vh', overflowY: 'auto', padding: 26 }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
               <div>
@@ -86,7 +140,7 @@ export default function TradeForm({ open, onClose, onSubmit }) {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
-              <Labeled label="Symbol"><input style={field} value={form.symbol} onChange={set('symbol')} placeholder="ES / EURUSD" required /></Labeled>
+              <Labeled label="Symbol"><input style={field} value={form.symbol} onChange={set('symbol')} placeholder="EURUSD / XAUUSD" required /></Labeled>
               <Labeled label="Side">
                 <select style={field} value={form.side} onChange={set('side')}>
                   <option>Long</option><option>Short</option>
@@ -104,13 +158,31 @@ export default function TradeForm({ open, onClose, onSubmit }) {
                   {SESSIONS.map((s) => <option key={s}>{s}</option>)}
                 </select>
               </Labeled>
-              <Labeled label="Quantity"><input type="number" step="1" style={field} value={form.qty} onChange={set('qty')} /></Labeled>
+              <Labeled label="Quantity / Lots"><input type="number" step="any" style={field} value={form.qty} onChange={set('qty')} /></Labeled>
 
-              <Labeled label="Entry"><input type="number" step="any" style={field} value={form.entry} onChange={set('entry')} /></Labeled>
-              <Labeled label="Exit"><input type="number" step="any" style={field} value={form.exit} onChange={set('exit')} /></Labeled>
+              <Labeled label="Entry"><input type="number" step="any" style={field} value={form.entry} onChange={set('entry')} placeholder="1.0850" /></Labeled>
+              <Labeled label="Exit"><input type="number" step="any" style={field} value={form.exit} onChange={set('exit')} placeholder="1.0910" /></Labeled>
               <Labeled label="R : R"><input type="number" step="any" style={field} value={form.rr} onChange={set('rr')} placeholder="2.1" /></Labeled>
 
-              <Labeled label="Net P&L ($)"><input type="number" step="any" style={field} value={form.pnl} onChange={set('pnl')} placeholder="250 / -80" required /></Labeled>
+              <Labeled label="Net P&L" hint={autoCalc && !pnlTouched ? 'auto' : undefined}>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="number" step="any"
+                    style={{ ...field, color: parseFloat(form.pnl) < 0 ? 'var(--red)' : parseFloat(form.pnl) > 0 ? 'var(--mint)' : 'var(--text)', fontFamily: 'var(--mono)', fontWeight: 600 }}
+                    value={form.pnl}
+                    onChange={(e) => { setPnlTouched(true); set('pnl')(e) }}
+                    placeholder="auto from entry/exit"
+                    required
+                  />
+                  {pnlTouched && (
+                    <button type="button" title="Back to auto"
+                      onClick={() => setPnlTouched(false)}
+                      style={{ position: 'absolute', right: 8, top: 8, fontSize: 11, color: 'var(--mint)', background: 'rgba(47,212,138,0.1)', padding: '3px 7px', borderRadius: 6 }}>
+                      auto
+                    </button>
+                  )}
+                </div>
+              </Labeled>
               <Labeled label="Fees ($)"><input type="number" step="any" style={field} value={form.fees} onChange={set('fees')} /></Labeled>
               <div>
                 <label style={labelStyle}>Rating</label>
@@ -118,13 +190,39 @@ export default function TradeForm({ open, onClose, onSubmit }) {
               </div>
             </div>
 
+            {/* Screenshot */}
+            <div style={{ marginTop: 16 }}>
+              <label style={labelStyle}>Trade Screenshot</label>
+              {preview ? (
+                <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--stroke)' }}>
+                  <img src={preview} alt="trade" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', background: '#0b100f', display: 'block' }} />
+                  <button type="button" onClick={removeFile}
+                    style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(4,7,6,0.75)', color: '#fff', borderRadius: 8, padding: '5px 9px', fontSize: 12 }}>
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <label style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  border: '1px dashed var(--stroke)', borderRadius: 12, padding: '22px', cursor: 'pointer',
+                  color: 'var(--text-3)', fontSize: 13, background: '#0e1413',
+                }}>
+                  <span style={{ fontSize: 22 }}>🖼️</span>
+                  <span>Click to upload a chart screenshot (PNG/JPG, ≤ 6 MB)</span>
+                  <input type="file" accept="image/*" onChange={onPickFile} style={{ display: 'none' }} />
+                </label>
+              )}
+            </div>
+
             <div style={{ marginTop: 14 }}>
               <Labeled label="Notes">
-                <textarea style={{ ...field, minHeight: 74, resize: 'vertical' }} value={form.notes} onChange={set('notes')} placeholder="Setup, emotions, execution grade..." />
+                <textarea style={{ ...field, minHeight: 70, resize: 'vertical' }} value={form.notes} onChange={set('notes')} placeholder="Setup, emotions, execution grade..." />
               </Labeled>
             </div>
 
-            <div style={{ display: 'flex', gap: 12, marginTop: 22, justifyContent: 'flex-end' }}>
+            {err && <div style={{ marginTop: 14, color: 'var(--red)', fontSize: 13, background: 'rgba(255,107,107,0.08)', padding: '10px 12px', borderRadius: 10 }}>{err}</div>}
+
+            <div style={{ display: 'flex', gap: 12, marginTop: 20, justifyContent: 'flex-end' }}>
               <button type="button" onClick={onClose} style={{ padding: '11px 20px', borderRadius: 11, border: '1px solid var(--stroke)', color: 'var(--text-2)' }}>Cancel</button>
               <motion.button
                 whileTap={{ scale: 0.96 }}
