@@ -7,6 +7,22 @@
 // FX majors:     1.0 lot = 100,000 units -> 1 pip (0.0001) = $10 per lot
 // Silver:        1.0 lot = 5,000 oz
 
+export const ASSET_GROUPS = [
+  { label: 'Metals', items: ['XAUUSD', 'XAGUSD', 'XPTUSD'] },
+  { label: 'FX Majors', items: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD'] },
+  { label: 'FX Crosses', items: ['GBPJPY', 'EURJPY', 'EURGBP', 'AUDJPY', 'CADJPY', 'CHFJPY', 'NZDJPY', 'EURAUD', 'GBPAUD', 'EURCAD', 'GBPCAD', 'AUDNZD', 'EURNZD'] },
+  { label: 'Indices', items: ['US30', 'NAS100', 'US500', 'GER40', 'UK100'] },
+  { label: 'Crypto', items: ['BTCUSD', 'ETHUSD', 'SOLUSD'] },
+]
+
+export const STRATEGIES = [
+  'Levels + M5 QML + Engulfing',
+  'Levels + M5 TJL2 + Engulfing',
+  'Levels + M5 TJL1 + Engulfing',
+  'TRC',
+  'SMT',
+]
+
 const RULES = [
   { test: /(xau|gold|^gc$)/i, size: 100 },     // Gold
   { test: /(xag|silver|^si$)/i, size: 5000 },   // Silver

@@ -27,9 +27,9 @@ export default function Dashboard({ trades, onAdd }) {
       {/* Top stat row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 14 }}>
         <StatCard label="Total Gross" value={fmtMoney(s.gross)} sub={`${s.n} trades`} delay={0.02} />
-        <StatCard label="Total Net" value={fmtMoney(s.netTotal)} accent={s.netTotal >= 0 ? 'var(--mint)' : 'var(--red)'} sub={`Fees ${fmtMoney(s.fees)}`} delay={0.06} />
+        <StatCard label="Total Net" value={fmtMoney(s.netTotal)} accent={s.netTotal >= 0 ? 'var(--mint)' : 'var(--red)'} sub={`Commission ${fmtMoney(s.fees)}`} delay={0.06} />
         <StatCard label="Expectancy / trade" value={fmtMoney(s.expectancy, 0)} accent={s.expectancy >= 0 ? 'var(--mint)' : 'var(--red)'} sub={`Avg R:R ${s.avgRR.toFixed(2)}`} delay={0.1} />
-        <StatCard label="Commissions" value={fmtMoney(s.fees)} sub="Total fees paid" delay={0.14} />
+        <StatCard label="Commissions" value={fmtMoney(s.fees)} sub="Total commission paid" delay={0.14} />
       </div>
 
       {/* Win rate + risk reward + wins/losses row */}

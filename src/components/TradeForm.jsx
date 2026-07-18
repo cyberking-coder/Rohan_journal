@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { StarRating } from './widgets'
 import { uploadScreenshot } from '../lib/storage'
-import { contractSizeFor, computePnl } from '../lib/instruments'
+import { contractSizeFor, computePnl, ASSET_GROUPS, STRATEGIES } from '../lib/instruments'
 
 const SESSIONS = ['London', 'New York', 'Asia', 'Overlap']
-const STRATEGIES = ['Breakout', 'FBD', 'Gapper', 'Reversal', 'Trend Pullback']
+const CUSTOM = '__custom__'
 
 const field = {
   background: '#0e1413', border: '1px solid var(--stroke)', color: 'var(--text)',
@@ -28,6 +28,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
   const [saving, setSaving] = useState(false)
   const [pnlTouched, setPnlTouched] = useState(false)
   const [csTouched, setCsTouched] = useState(false)
+  const [customSym, setCustomSym] = useState(false)
   const [autoCalc, setAutoCalc] = useState(false)
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
@@ -35,7 +36,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
 
   function blank() {
     return {
-      symbol: '', side: 'Long', strategy: 'Breakout', session: 'New York',
+      symbol: 'XAUUSD', side: 'Long', strategy: STRATEGIES[0], session: 'New York',
       entry: '', exit: '', qty: '0.10', pnl: '', fees: '2', rr: '',
       contractSize: '100',
       notes: '', traded_at: new Date().toISOString().slice(0, 16),
@@ -81,7 +82,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
 
   function resetAll() {
     setForm(blank()); setRating(3); setPnlTouched(false); setCsTouched(false); setAutoCalc(false)
-    removeFile(); setErr(null)
+    setCustomSym(false); removeFile(); setErr(null)
   }
 
   async function submit(e) {
@@ -150,7 +151,29 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
-              <Labeled label="Symbol"><input style={field} value={form.symbol} onChange={set('symbol')} placeholder="EURUSD / XAUUSD" required /></Labeled>
+              <Labeled label="Asset">
+                {customSym ? (
+                  <div style={{ position: 'relative' }}>
+                    <input style={field} value={form.symbol} onChange={set('symbol')} placeholder="e.g. USDINR" autoFocus required />
+                    <button type="button" title="Back to list"
+                      onClick={() => { setCustomSym(false); setForm((f) => ({ ...f, symbol: 'XAUUSD' })) }}
+                      style={{ position: 'absolute', right: 8, top: 8, fontSize: 11, color: 'var(--mint)', background: 'rgba(47,212,138,0.1)', padding: '3px 7px', borderRadius: 6 }}>list</button>
+                  </div>
+                ) : (
+                  <select style={field} value={form.symbol}
+                    onChange={(e) => {
+                      if (e.target.value === CUSTOM) { setCustomSym(true); setForm((f) => ({ ...f, symbol: '' })) }
+                      else set('symbol')(e)
+                    }}>
+                    {ASSET_GROUPS.map((g) => (
+                      <optgroup key={g.label} label={g.label}>
+                        {g.items.map((a) => <option key={a} value={a}>{a}</option>)}
+                      </optgroup>
+                    ))}
+                    <option value={CUSTOM}>Custom…</option>
+                  </select>
+                )}
+              </Labeled>
               <Labeled label="Side">
                 <select style={field} value={form.side} onChange={set('side')}>
                   <option>Long</option><option>Short</option>
@@ -198,7 +221,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
                   )}
                 </div>
               </Labeled>
-              <Labeled label="Fees ($)"><input type="number" step="any" style={field} value={form.fees} onChange={set('fees')} /></Labeled>
+              <Labeled label="Commission ($)"><input type="number" step="any" style={field} value={form.fees} onChange={set('fees')} /></Labeled>
             </div>
 
             {/* Live calculation breakdown */}

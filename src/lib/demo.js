@@ -1,8 +1,14 @@
 // Deterministic-ish demo trade generator used when Supabase is not configured,
 // so the UI is fully explorable out of the box.
 
-const SYMBOLS = ['ES', 'NQ', 'EURUSD', 'BTCUSD', 'AAPL', 'TSLA', 'GBPUSD', 'GC']
-const STRATEGIES = ['Breakout', 'FBD', 'Gapper', 'Reversal', 'Trend Pullback']
+const SYMBOLS = ['XAUUSD', 'XAGUSD', 'GBPJPY', 'EURUSD', 'GBPUSD', 'USDJPY', 'US30', 'NAS100']
+const STRATEGIES = [
+  'Levels + M5 QML + Engulfing',
+  'Levels + M5 TJL2 + Engulfing',
+  'Levels + M5 TJL1 + Engulfing',
+  'TRC',
+  'SMT',
+]
 const SESSIONS = ['London', 'New York', 'Asia', 'Overlap']
 const SIDES = ['Long', 'Short']
 
