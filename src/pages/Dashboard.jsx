@@ -1,11 +1,52 @@
 import { useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
 import { PageHeader, Panel, RangeTabs } from '../components/common'
 import { StatCard, DonutGauge, HexStat, MiniStat } from '../components/widgets'
 import { EquityCurve, PnlBars, SessionBars } from '../components/charts'
 import HeatmapCalendar from '../components/HeatmapCalendar'
 import {
-  filterByRange, computeStats, equityCurve, dailyPnl, bySession, fmtMoney, fmtPct,
+  filterByRange, computeStats, equityCurve, dailyPnl, bySession, buildInsights, fmtMoney, fmtPct,
 } from '../lib/stats'
+
+function boldText(text) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((c, i) =>
+    c.startsWith('**') && c.endsWith('**')
+      ? <span key={i} style={{ color: 'var(--text)', fontWeight: 600 }}>{c.slice(2, -2)}</span>
+      : <span key={i}>{c}</span>
+  )
+}
+
+function TopInsight({ insights }) {
+  const strength = insights.strengths[0] || insights.keep[0]
+  const improve = insights.improvements[0]
+  if (!strength && !improve) return null
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.16 }}
+      className="card"
+      style={{ padding: '16px 20px', marginBottom: 14, display: 'grid', gridTemplateColumns: strength && improve ? '1fr 1fr' : '1fr', gap: 18 }}
+    >
+      {strength && (
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <span style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 8, background: 'var(--mint)', color: '#04140d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>▲</span>
+          <div>
+            <div className="eyebrow" style={{ color: 'var(--mint)', marginBottom: 3 }}>Your edge</div>
+            <div style={{ fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-2)' }}>{boldText(strength)}</div>
+          </div>
+        </div>
+      )}
+      {improve && (
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', borderLeft: strength ? '1px solid var(--stroke)' : 'none', paddingLeft: strength ? 18 : 0 }}>
+          <span style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 8, background: 'var(--amber)', color: '#04140d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>!</span>
+          <div>
+            <div className="eyebrow" style={{ color: 'var(--amber)', marginBottom: 3 }}>Fix this</div>
+            <div style={{ fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-2)' }}>{boldText(improve)}</div>
+          </div>
+        </div>
+      )}
+    </motion.div>
+  )
+}
 
 export default function Dashboard({ trades, onAdd }) {
   const [range, setRange] = useState('quarter')
@@ -14,6 +55,7 @@ export default function Dashboard({ trades, onAdd }) {
   const curve = useMemo(() => equityCurve(scoped), [scoped])
   const bars = useMemo(() => dailyPnl(trades, 30), [trades])
   const sessions = useMemo(() => bySession(scoped), [scoped])
+  const insights = useMemo(() => buildInsights(scoped), [scoped])
 
   return (
     <>
@@ -31,6 +73,9 @@ export default function Dashboard({ trades, onAdd }) {
         <StatCard label="Expectancy / trade" value={fmtMoney(s.expectancy, 0)} accent={s.expectancy >= 0 ? 'var(--mint)' : 'var(--red)'} sub={`Avg R:R ${s.avgRR.toFixed(2)}`} delay={0.1} />
         <StatCard label="Commissions" value={fmtMoney(s.fees)} sub="Total commission paid" delay={0.14} />
       </div>
+
+      {/* Top insight banner */}
+      {!insights.note && <TopInsight insights={insights} />}
 
       {/* Win rate + risk reward + wins/losses row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.2fr 1.4fr', gap: 14, marginBottom: 14 }} className="grid-3">

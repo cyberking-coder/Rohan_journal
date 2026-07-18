@@ -10,7 +10,17 @@ import {
 
 export default function Analysis({ trades }) {
   const [range, setRange] = useState('month')
-  const scoped = useMemo(() => filterByRange(trades, range), [trades, range])
+  const [strategy, setStrategy] = useState('All')
+
+  const strategyOptions = useMemo(
+    () => ['All', ...Array.from(new Set(trades.map((t) => t.strategy).filter(Boolean)))],
+    [trades]
+  )
+
+  const scoped = useMemo(() => {
+    const inRange = filterByRange(trades, range)
+    return strategy === 'All' ? inRange : inRange.filter((t) => t.strategy === strategy)
+  }, [trades, range, strategy])
   const s = useMemo(() => computeStats(scoped), [scoped])
   const sessions = useMemo(() => bySession(scoped), [scoped])
   const byStrat = useMemo(() => byKey(scoped, 'strategy'), [scoped])
@@ -31,8 +41,19 @@ export default function Analysis({ trades }) {
   return (
     <>
       <PageHeader eyebrow="Deep Dive" title="Analysis">
-        <RangeTabs value={range} onChange={setRange} />
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <select value={strategy} onChange={(e) => setStrategy(e.target.value)}
+            style={{ background: 'var(--card)', border: '1px solid var(--stroke)', color: 'var(--text)', borderRadius: 11, padding: '9px 12px', fontSize: 13, maxWidth: 230 }}>
+            {strategyOptions.map((o) => <option key={o} value={o}>{o === 'All' ? 'All strategies' : o}</option>)}
+          </select>
+          <RangeTabs value={range} onChange={setRange} />
+        </div>
       </PageHeader>
+      {strategy !== 'All' && (
+        <div style={{ marginBottom: 14, fontSize: 12.5, color: 'var(--text-3)' }}>
+          Filtered to <span style={{ color: 'var(--mint)' }}>{strategy}</span> · {scoped.length} trade{scoped.length === 1 ? '' : 's'}
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14, marginBottom: 16 }}>
         <StatCard label="Net P&L" value={fmtMoney(s.netTotal)} accent={s.netTotal >= 0 ? 'var(--mint)' : 'var(--red)'} delay={0.02} />
