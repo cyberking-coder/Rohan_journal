@@ -28,7 +28,7 @@ function TopInsight({ insights }) {
     >
       {strength && (
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-          <span style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 8, background: 'var(--mint)', color: '#04140d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>▲</span>
+          <span style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 8, background: 'var(--red)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>$</span>
           <div>
             <div className="eyebrow" style={{ color: 'var(--mint)', marginBottom: 3 }}>Your edge</div>
             <div style={{ fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-2)' }}>{boldText(strength)}</div>
