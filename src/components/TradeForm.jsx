@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { StarRating } from './widgets'
 import { uploadScreenshot } from '../lib/storage'
+import { contractSizeFor, computePnl } from '../lib/instruments'
 
 const SESSIONS = ['London', 'New York', 'Asia', 'Overlap']
 const STRATEGIES = ['Breakout', 'FBD', 'Gapper', 'Reversal', 'Trend Pullback']
@@ -26,6 +27,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
   const [rating, setRating] = useState(3)
   const [saving, setSaving] = useState(false)
   const [pnlTouched, setPnlTouched] = useState(false)
+  const [csTouched, setCsTouched] = useState(false)
   const [autoCalc, setAutoCalc] = useState(false)
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
@@ -34,24 +36,32 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
   function blank() {
     return {
       symbol: '', side: 'Long', strategy: 'Breakout', session: 'New York',
-      entry: '', exit: '', qty: '1', pnl: '', fees: '2', rr: '',
+      entry: '', exit: '', qty: '0.10', pnl: '', fees: '2', rr: '',
+      contractSize: '100',
       notes: '', traded_at: new Date().toISOString().slice(0, 16),
     }
   }
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
-  // Auto-calculate P&L from entry/exit/qty/side unless the user typed one in.
+  // Auto-detect contract size from the symbol (unless user overrode it).
+  useEffect(() => {
+    if (csTouched || !form.symbol) return
+    const cs = contractSizeFor(form.symbol)
+    setForm((f) => ({ ...f, contractSize: String(cs) }))
+  }, [form.symbol, csTouched])
+
+  // Auto-calculate P&L = price move × lots × contract size (unless overridden).
   useEffect(() => {
     if (pnlTouched) return
-    const e = parseFloat(form.entry)
-    const x = parseFloat(form.exit)
-    const q = parseInt(form.qty) || 1
-    if (!isFinite(e) || !isFinite(x)) { setAutoCalc(false); return }
-    const gross = (form.side === 'Long' ? x - e : e - x) * q
-    setForm((f) => ({ ...f, pnl: (Math.round(gross * 100) / 100).toString() }))
+    const pnl = computePnl({
+      entry: form.entry, exit: form.exit, lots: form.qty,
+      side: form.side, contractSize: form.contractSize,
+    })
+    if (pnl === null) { setAutoCalc(false); return }
+    setForm((f) => ({ ...f, pnl: String(pnl) }))
     setAutoCalc(true)
-  }, [form.entry, form.exit, form.qty, form.side, pnlTouched])
+  }, [form.entry, form.exit, form.qty, form.side, form.contractSize, pnlTouched])
 
   function onPickFile(e) {
     const f = e.target.files?.[0]
@@ -70,7 +80,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
   }
 
   function resetAll() {
-    setForm(blank()); setRating(3); setPnlTouched(false); setAutoCalc(false)
+    setForm(blank()); setRating(3); setPnlTouched(false); setCsTouched(false); setAutoCalc(false)
     removeFile(); setErr(null)
   }
 
@@ -89,7 +99,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
         session: form.session,
         entry: parseFloat(form.entry) || 0,
         exit: parseFloat(form.exit) || 0,
-        qty: parseInt(form.qty) || 1,
+        qty: parseFloat(form.qty) || 0,
         pnl: parseFloat(form.pnl) || 0,
         fees: parseFloat(form.fees) || 0,
         rr: parseFloat(form.rr) || 0,
@@ -158,12 +168,17 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
                   {SESSIONS.map((s) => <option key={s}>{s}</option>)}
                 </select>
               </Labeled>
-              <Labeled label="Quantity / Lots"><input type="number" step="any" style={field} value={form.qty} onChange={set('qty')} /></Labeled>
-
-              <Labeled label="Entry"><input type="number" step="any" style={field} value={form.entry} onChange={set('entry')} placeholder="1.0850" /></Labeled>
-              <Labeled label="Exit"><input type="number" step="any" style={field} value={form.exit} onChange={set('exit')} placeholder="1.0910" /></Labeled>
               <Labeled label="R : R"><input type="number" step="any" style={field} value={form.rr} onChange={set('rr')} placeholder="2.1" /></Labeled>
 
+              <Labeled label="Entry"><input type="number" step="any" style={field} value={form.entry} onChange={set('entry')} placeholder="2000.00" /></Labeled>
+              <Labeled label="Exit"><input type="number" step="any" style={field} value={form.exit} onChange={set('exit')} placeholder="2006.00" /></Labeled>
+              <Labeled label="Lots" hint="e.g. 0.10"><input type="number" step="any" style={field} value={form.qty} onChange={set('qty')} placeholder="0.10" /></Labeled>
+
+              <Labeled label="Contract Size" hint={csTouched ? undefined : 'auto'}>
+                <input type="number" step="any" style={field} value={form.contractSize}
+                  onChange={(e) => { setCsTouched(true); set('contractSize')(e) }}
+                  placeholder="100" />
+              </Labeled>
               <Labeled label="Net P&L" hint={autoCalc && !pnlTouched ? 'auto' : undefined}>
                 <div style={{ position: 'relative' }}>
                   <input
@@ -171,7 +186,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
                     style={{ ...field, color: parseFloat(form.pnl) < 0 ? 'var(--red)' : parseFloat(form.pnl) > 0 ? 'var(--mint)' : 'var(--text)', fontFamily: 'var(--mono)', fontWeight: 600 }}
                     value={form.pnl}
                     onChange={(e) => { setPnlTouched(true); set('pnl')(e) }}
-                    placeholder="auto from entry/exit"
+                    placeholder="auto"
                     required
                   />
                   {pnlTouched && (
@@ -184,10 +199,14 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
                 </div>
               </Labeled>
               <Labeled label="Fees ($)"><input type="number" step="any" style={field} value={form.fees} onChange={set('fees')} /></Labeled>
-              <div>
-                <label style={labelStyle}>Rating</label>
-                <div style={{ paddingTop: 8 }}><StarRating value={rating} onChange={setRating} size={22} /></div>
-              </div>
+            </div>
+
+            {/* Live calculation breakdown */}
+            <PnlBreakdown form={form} />
+
+            <div style={{ marginTop: 14 }}>
+              <label style={labelStyle}>Rating</label>
+              <div style={{ paddingTop: 4 }}><StarRating value={rating} onChange={setRating} size={24} /></div>
             </div>
 
             {/* Screenshot */}
@@ -238,5 +257,39 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
         </motion.div>
       )}
     </AnimatePresence>
+  )
+}
+
+function PnlBreakdown({ form }) {
+  const e = parseFloat(form.entry)
+  const x = parseFloat(form.exit)
+  const lots = parseFloat(form.qty)
+  const cs = parseFloat(form.contractSize) || 1
+  if (![e, x, lots].every(isFinite) || !lots) return null
+
+  const move = form.side === 'Long' ? x - e : e - x
+  const pnl = Math.round(move * lots * cs * 100) / 100
+  const perDollar = Math.round(lots * cs * 100) / 100
+  const pos = pnl >= 0
+
+  const fmt = (n) => `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  return (
+    <div style={{
+      marginTop: 12, padding: '11px 14px', borderRadius: 11,
+      border: '1px solid var(--stroke)', background: '#0e1413',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8,
+      fontSize: 13,
+    }}>
+      <span style={{ color: 'var(--text-2)', fontFamily: 'var(--mono)' }}>
+        {lots} lot × <span style={{ color: move >= 0 ? 'var(--mint)' : 'var(--red)' }}>{move >= 0 ? '+' : ''}{move.toFixed(2)}</span> move × {cs}
+      </span>
+      <span style={{ color: 'var(--text-3)', fontSize: 11.5 }}>
+        every $1.00 move = {fmt(perDollar)}
+      </span>
+      <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 15, color: pos ? 'var(--mint)' : 'var(--red)' }}>
+        = {fmt(pnl)}
+      </span>
+    </div>
   )
 }

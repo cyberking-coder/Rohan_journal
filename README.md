@@ -47,6 +47,21 @@ stored in your browser.
 4. Restart `npm run dev`. The sidebar badge turns green ("Supabase connected")
    and all reads/writes go to your database.
 
+## Deploy on Vercel
+
+The repo includes [`vercel.json`](vercel.json) (framework `vite`, SPA rewrites).
+
+1. In Vercel: **Add New → Project →** import `cyberking-coder/rohan_journal`
+   (branch `main`). Vercel auto-detects Vite — build `npm run build`, output `dist`.
+2. **Settings → Environment Variables** — add both, then redeploy:
+   ```
+   VITE_SUPABASE_URL=https://lzxzjymfqrljvihwtgsy.supabase.co
+   VITE_SUPABASE_ANON_KEY=sb_publishable_...
+   ```
+   (Vite inlines these at build time, so a redeploy is required after adding.)
+3. Add the Vercel domain to Supabase **Authentication → URL Configuration**
+   (Site URL + Redirect URLs) so Google login redirects back correctly.
+
 ## Deploy on Railway
 
 The repo is Railway-ready. Railway builds with Nixpacks and serves the static
