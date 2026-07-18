@@ -5,7 +5,7 @@ import { StatCard, DonutGauge, HexStat, MiniStat } from '../components/widgets'
 import { EquityCurve, PnlBars, SessionBars } from '../components/charts'
 import HeatmapCalendar from '../components/HeatmapCalendar'
 import {
-  filterByRange, computeStats, equityCurve, dailyPnl, bySession, buildInsights, fmtMoney, fmtPct,
+  filterByRange, computeStats, equityCurve, dailyPnl, bySession, buildInsights, fmtMoney, fmtPct, fmtRR,
 } from '../lib/stats'
 
 function boldText(text) {
@@ -70,7 +70,7 @@ export default function Dashboard({ trades, onAdd }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 14 }}>
         <StatCard label="Total Gross" value={fmtMoney(s.gross)} sub={`${s.n} trades`} delay={0.02} />
         <StatCard label="Total Net" value={fmtMoney(s.netTotal)} accent={s.netTotal >= 0 ? 'var(--mint)' : 'var(--red)'} sub={`Commission ${fmtMoney(s.fees)}`} delay={0.06} />
-        <StatCard label="Expectancy / trade" value={fmtMoney(s.expectancy, 0)} accent={s.expectancy >= 0 ? 'var(--mint)' : 'var(--red)'} sub={`Avg R:R ${s.avgRR.toFixed(2)}`} delay={0.1} />
+        <StatCard label="Expectancy / trade" value={fmtMoney(s.expectancy, 0)} accent={s.expectancy >= 0 ? 'var(--mint)' : 'var(--red)'} sub={`Avg R:R ${fmtRR(s.avgRR)}`} delay={0.1} />
         <StatCard label="Commissions" value={fmtMoney(s.fees)} sub="Total commission paid" delay={0.14} />
       </div>
 
@@ -95,7 +95,7 @@ export default function Dashboard({ trades, onAdd }) {
 
         <Panel title="Risk / Reward" delay={0.2} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
-            <HexStat value={s.avgRR.toFixed(1)} label="Avg R:R" delay={0.3} />
+            <HexStat value={fmtRR(s.avgRR)} label="Avg R:R" delay={0.3} />
             <HexStat value={isFinite(s.profitFactor) ? s.profitFactor.toFixed(1) : '∞'} label="Profit Factor" delay={0.4} />
           </div>
         </Panel>

@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { StarRating } from './widgets'
 import { uploadScreenshot } from '../lib/storage'
 import { contractSizeFor, computePnl, ASSET_GROUPS, STRATEGIES } from '../lib/instruments'
+import { parseRR } from '../lib/stats'
 
 const SESSIONS = ['London', 'New York', 'Asia', 'Overlap']
 const CUSTOM = '__custom__'
@@ -103,7 +104,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
         qty: parseFloat(form.qty) || 0,
         pnl: parseFloat(form.pnl) || 0,
         fees: parseFloat(form.fees) || 0,
-        rr: parseFloat(form.rr) || 0,
+        rr: parseRR(form.rr),
         rating,
         notes: form.notes,
         screenshot_url,
@@ -191,7 +192,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
                   {SESSIONS.map((s) => <option key={s}>{s}</option>)}
                 </select>
               </Labeled>
-              <Labeled label="R : R"><input type="number" step="any" style={field} value={form.rr} onChange={set('rr')} placeholder="2.1" /></Labeled>
+              <Labeled label="R : R" hint="e.g. 1:2"><input type="text" inputMode="text" style={field} value={form.rr} onChange={set('rr')} placeholder="1:2" /></Labeled>
 
               <Labeled label="Entry"><input type="number" step="any" style={field} value={form.entry} onChange={set('entry')} placeholder="2000.00" /></Labeled>
               <Labeled label="Exit"><input type="number" step="any" style={field} value={form.exit} onChange={set('exit')} placeholder="2006.00" /></Labeled>

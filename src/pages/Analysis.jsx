@@ -5,7 +5,7 @@ import { StatCard, StarRating } from '../components/widgets'
 import { SessionBars } from '../components/charts'
 import {
   filterByRange, computeStats, bySession, byKey, fmtMoney, fmtPct,
-  buildInsights, biggestTrades, net,
+  buildInsights, biggestTrades, net, fmtRR,
 } from '../lib/stats'
 
 export default function Analysis({ trades }) {
@@ -59,7 +59,7 @@ export default function Analysis({ trades }) {
         <StatCard label="Net P&L" value={fmtMoney(s.netTotal)} accent={s.netTotal >= 0 ? 'var(--mint)' : 'var(--red)'} delay={0.02} />
         <StatCard label="Win Rate" value={fmtPct(s.winRate)} delay={0.05} />
         <StatCard label="Profit Factor" value={isFinite(s.profitFactor) ? s.profitFactor.toFixed(2) : '∞'} delay={0.08} />
-        <StatCard label="Avg R:R" value={s.avgRR.toFixed(2)} delay={0.11} />
+        <StatCard label="Avg R:R" value={fmtRR(s.avgRR)} delay={0.11} />
         <StatCard label="Expectancy" value={fmtMoney(s.expectancy)} accent={s.expectancy >= 0 ? 'var(--mint)' : 'var(--red)'} delay={0.14} />
       </div>
 

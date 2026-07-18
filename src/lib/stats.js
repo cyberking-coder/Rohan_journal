@@ -231,3 +231,25 @@ export function fmtPct(v, digits = 0) {
   if (!isFinite(v)) return '∞'
   return `${(Number(v) || 0).toFixed(digits)}%`
 }
+
+// Accepts "1:2", "1:2.5", "2", 2 -> returns reward-per-1-risk as a number.
+export function parseRR(v) {
+  if (typeof v === 'number') return v
+  const str = String(v ?? '').trim()
+  if (!str) return 0
+  if (str.includes(':')) {
+    const [a, b] = str.split(':').map((x) => parseFloat(x))
+    if (a > 0 && isFinite(b)) return b / a
+    return 0
+  }
+  const n = parseFloat(str)
+  return isFinite(n) ? n : 0
+}
+
+// Displays a stored reward-to-risk number as "1:2" / "1:2.5".
+export function fmtRR(v) {
+  const n = Number(v) || 0
+  if (n <= 0) return '—'
+  const x = Math.round(n * 100) / 100
+  return `1:${x % 1 === 0 ? x.toFixed(0) : x.toFixed(2).replace(/0$/, '')}`
+}

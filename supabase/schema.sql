@@ -12,7 +12,7 @@ create table if not exists public.trades (
   session     text,
   entry       numeric,
   exit        numeric,
-  qty         integer default 1,
+  qty         numeric default 1,             -- lots (supports 0.01, 0.12, ...)
   pnl         numeric not null default 0,   -- gross P&L in account currency
   fees        numeric not null default 0,
   rr          numeric,                       -- realised risk : reward

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { net, fmtMoney } from '../lib/stats'
+import { net, fmtMoney, fmtRR } from '../lib/stats'
 import { StarRating, PnlPill } from './widgets'
 
 export default function TradeTable({ trades, onDelete }) {
@@ -51,7 +51,7 @@ export default function TradeTable({ trades, onDelete }) {
               </td>
               <td style={{ ...cell, color: 'var(--text-2)', fontSize: 13 }}>{t.strategy}</td>
               <td style={{ ...cell, color: 'var(--text-2)', fontSize: 13 }}>{t.session}</td>
-              <td style={{ ...cell, fontFamily: 'var(--mono)', fontSize: 13 }}>{Number(t.rr || 0).toFixed(2)}</td>
+              <td style={{ ...cell, fontFamily: 'var(--mono)', fontSize: 13 }}>{fmtRR(t.rr)}</td>
               <td style={cell}><StarRating value={t.rating} size={13} /></td>
               <td style={cell}>
                 {t.screenshot_url ? (
