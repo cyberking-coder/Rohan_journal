@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { StarRating } from './widgets'
 import { uploadScreenshot } from '../lib/storage'
 import { contractSizeFor, computePnl, ASSET_GROUPS, STRATEGIES } from '../lib/instruments'
-import { parseRR } from '../lib/stats'
+import { parseRR, fmtRR } from '../lib/stats'
 
 const SESSIONS = ['London', 'New York', 'Asia', 'Overlap']
 const CUSTOM = '__custom__'
@@ -29,6 +29,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
   const [saving, setSaving] = useState(false)
   const [pnlTouched, setPnlTouched] = useState(false)
   const [csTouched, setCsTouched] = useState(false)
+  const [rrTouched, setRrTouched] = useState(false)
   const [customSym, setCustomSym] = useState(false)
   const [autoCalc, setAutoCalc] = useState(false)
   const [file, setFile] = useState(null)
@@ -38,7 +39,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
   function blank() {
     return {
       symbol: 'XAUUSD', side: 'Long', strategy: STRATEGIES[0], session: 'New York',
-      entry: '', exit: '', qty: '0.10', pnl: '', fees: '2', rr: '',
+      entry: '', exit: '', sl: '', tp: '', qty: '0.10', pnl: '', fees: '2', rr: '',
       contractSize: '100',
       notes: '', traded_at: new Date().toISOString().slice(0, 16),
     }
@@ -52,6 +53,19 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
     const cs = contractSizeFor(form.symbol)
     setForm((f) => ({ ...f, contractSize: String(cs) }))
   }, [form.symbol, csTouched])
+
+  // Auto-calculate R:R = reward ÷ risk from entry / stop-loss / take-profit.
+  useEffect(() => {
+    if (rrTouched) return
+    const e = parseFloat(form.entry)
+    const sl = parseFloat(form.sl)
+    const tp = parseFloat(form.tp)
+    if (![e, sl, tp].every(isFinite)) return
+    const risk = Math.abs(e - sl)
+    const reward = Math.abs(tp - e)
+    if (!risk) return
+    setForm((f) => ({ ...f, rr: fmtRR(reward / risk) }))
+  }, [form.entry, form.sl, form.tp, rrTouched])
 
   // Auto-calculate P&L = price move × lots × contract size (unless overridden).
   useEffect(() => {
@@ -82,7 +96,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
   }
 
   function resetAll() {
-    setForm(blank()); setRating(3); setPnlTouched(false); setCsTouched(false); setAutoCalc(false)
+    setForm(blank()); setRating(3); setPnlTouched(false); setCsTouched(false); setRrTouched(false); setAutoCalc(false)
     setCustomSym(false); removeFile(); setErr(null)
   }
 
@@ -192,11 +206,25 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
                   {SESSIONS.map((s) => <option key={s}>{s}</option>)}
                 </select>
               </Labeled>
-              <Labeled label="R : R" hint="e.g. 1:2"><input type="text" inputMode="text" style={field} value={form.rr} onChange={set('rr')} placeholder="1:2" /></Labeled>
+              <Labeled label="Lots" hint="e.g. 0.10"><input type="number" step="any" style={field} value={form.qty} onChange={set('qty')} placeholder="0.10" /></Labeled>
 
               <Labeled label="Entry"><input type="number" step="any" style={field} value={form.entry} onChange={set('entry')} placeholder="2000.00" /></Labeled>
-              <Labeled label="Exit"><input type="number" step="any" style={field} value={form.exit} onChange={set('exit')} placeholder="2006.00" /></Labeled>
-              <Labeled label="Lots" hint="e.g. 0.10"><input type="number" step="any" style={field} value={form.qty} onChange={set('qty')} placeholder="0.10" /></Labeled>
+              <Labeled label="Stop Loss"><input type="number" step="any" style={field} value={form.sl} onChange={set('sl')} placeholder="1997.00" /></Labeled>
+              <Labeled label="Take Profit"><input type="number" step="any" style={field} value={form.tp} onChange={set('tp')} placeholder="2006.00" /></Labeled>
+
+              <Labeled label="Exit" hint="actual close"><input type="number" step="any" style={field} value={form.exit} onChange={set('exit')} placeholder="2006.00" /></Labeled>
+              <Labeled label="R : R" hint={rrTouched ? 'manual' : 'auto'}>
+                <div style={{ position: 'relative' }}>
+                  <input type="text" style={field} value={form.rr}
+                    onChange={(e) => { setRrTouched(true); set('rr')(e) }}
+                    placeholder="1:2" />
+                  {rrTouched && (
+                    <button type="button" title="Back to auto"
+                      onClick={() => setRrTouched(false)}
+                      style={{ position: 'absolute', right: 8, top: 8, fontSize: 11, color: 'var(--mint)', background: 'rgba(47,212,138,0.1)', padding: '3px 7px', borderRadius: 6 }}>auto</button>
+                  )}
+                </div>
+              </Labeled>
 
               <Labeled label="Contract Size" hint={csTouched ? undefined : 'auto'}>
                 <input type="number" step="any" style={field} value={form.contractSize}
