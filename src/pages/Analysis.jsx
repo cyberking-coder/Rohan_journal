@@ -41,7 +41,7 @@ export default function Analysis({ trades }) {
   return (
     <>
       <PageHeader eyebrow="Deep Dive" title="Analysis">
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="page-controls" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <select value={strategy} onChange={(e) => setStrategy(e.target.value)}
             style={{ background: 'var(--card)', border: '1px solid var(--stroke)', color: 'var(--text)', borderRadius: 11, padding: '9px 12px', fontSize: 13, maxWidth: 230 }}>
             {strategyOptions.map((o) => <option key={o} value={o}>{o === 'All' ? 'All strategies' : o}</option>)}

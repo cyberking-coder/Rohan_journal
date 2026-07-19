@@ -21,12 +21,20 @@ export default function App() {
 function Journalized({ userId }) {
   const [page, setPage] = useState('dashboard')
   const [formOpen, setFormOpen] = useState(false)
-  const { trades, loading, addTrade, deleteTrade, isSupabaseConfigured } = useTrades(userId)
+  const { trades, loading, error, addTrade, deleteTrade, isSupabaseConfigured } = useTrades(userId)
 
   const openForm = () => setFormOpen(true)
 
   return (
     <Shell active={page} onNav={setPage} onAdd={openForm} isDemo={!isSupabaseConfigured}>
+      {error && (
+        <div style={{
+          marginBottom: 16, padding: '12px 16px', borderRadius: 12, fontSize: 13,
+          background: 'rgba(255,107,107,0.09)', border: '1px solid rgba(255,107,107,0.3)', color: 'var(--red)',
+        }}>
+          Couldn't load your trades: {error}. Make sure the database schema has been applied in Supabase.
+        </div>
+      )}
       {loading ? (
         <LoadingState />
       ) : (

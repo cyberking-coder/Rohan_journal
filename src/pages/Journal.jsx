@@ -22,7 +22,7 @@ export default function Journal({ trades, onAdd, onDelete }) {
   return (
     <>
       <PageHeader eyebrow="Trade Log" title="Journal">
-        <button onClick={onAdd} style={{ padding: '10px 18px', borderRadius: 11, fontWeight: 600, fontSize: 14, background: 'linear-gradient(120deg,#3ee39a,#23b978)', color: '#04140d' }}>+ Add Trade</button>
+        <button onClick={onAdd} className="hide-mobile" style={{ padding: '10px 18px', borderRadius: 11, fontWeight: 600, fontSize: 14, background: 'linear-gradient(120deg,#3ee39a,#23b978)', color: '#04140d' }}>+ Add Trade</button>
       </PageHeader>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 16 }}>

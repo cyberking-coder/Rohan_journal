@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, isSupabaseConfigured, TABLE } from './supabase'
-import { generateDemoTrades } from './demo'
 
-const LS_KEY = 'trader_brag_demo_trades'
+const LS_KEY = 'forex_greek_trades'
 
+// Local storage is only used when Supabase is NOT configured (e.g. local dev).
+// It starts empty and only ever holds trades the user actually adds.
 function loadLocal() {
   try {
     const raw = localStorage.getItem(LS_KEY)
-    if (raw) return JSON.parse(raw)
-  } catch { /* ignore */ }
-  const seed = generateDemoTrades()
-  try { localStorage.setItem(LS_KEY, JSON.stringify(seed)) } catch { /* ignore */ }
-  return seed
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
 }
 
 function saveLocal(trades) {
@@ -31,15 +31,15 @@ export function useTrades(userId = null) {
       setLoading(false)
       return
     }
-    // Row Level Security scopes rows to the signed-in user; the client
-    // query just orders them.
+    // Row Level Security scopes rows to the signed-in user.
     const { data, error } = await supabase
       .from(TABLE)
       .select('*')
       .order('traded_at', { ascending: true })
     if (error) {
+      // Surface the real problem instead of masking it with fake data.
       setError(error.message)
-      setTrades(loadLocal())
+      setTrades([])
     } else {
       setTrades(data || [])
       setError(null)

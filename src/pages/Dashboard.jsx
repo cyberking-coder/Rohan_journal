@@ -60,9 +60,9 @@ export default function Dashboard({ trades, onAdd }) {
   return (
     <>
       <PageHeader eyebrow="Overview" title="Dashboard">
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div className="page-controls" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <RangeTabs value={range} onChange={setRange} />
-          <button onClick={onAdd} style={{ padding: '9px 16px', borderRadius: 11, fontWeight: 600, fontSize: 13, background: 'linear-gradient(120deg,#3ee39a,#23b978)', color: '#04140d' }}>+ Add</button>
+          <button onClick={onAdd} className="hide-mobile" style={{ padding: '9px 16px', borderRadius: 11, fontWeight: 600, fontSize: 13, background: 'linear-gradient(120deg,#3ee39a,#23b978)', color: '#04140d' }}>+ Add</button>
         </div>
       </PageHeader>
 

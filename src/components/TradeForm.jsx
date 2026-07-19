@@ -165,7 +165,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
               <button type="button" onClick={onClose} style={{ fontSize: 22, color: 'var(--text-3)' }}>✕</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+            <div className="form-grid">
               <Labeled label="Asset">
                 {customSym ? (
                   <div style={{ position: 'relative' }}>

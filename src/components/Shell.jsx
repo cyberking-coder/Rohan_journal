@@ -27,7 +27,7 @@ export function Logo() {
 
 export default function Shell({ active, onNav, onAdd, isDemo, children }) {
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="app-shell" style={{ display: 'flex', minHeight: '100vh' }}>
       {/* Sidebar */}
       <aside style={{
         width: 232, flexShrink: 0, borderRight: '1px solid var(--stroke)',
@@ -80,18 +80,61 @@ export default function Shell({ active, onNav, onAdd, isDemo, children }) {
         </div>
       </aside>
 
+      {/* Mobile top bar */}
+      <header className="mobile-topbar">
+        <Logo />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 10.5, color: isDemo ? 'var(--amber)' : 'var(--mint)' }}>●</span>
+          <UserAvatar />
+        </div>
+      </header>
+
       {/* Main */}
       <main style={{ flex: 1, minWidth: 0, padding: '24px 30px 60px' }} className="main">
         {children}
       </main>
 
-      <style>{`
-        @media (max-width: 820px) {
-          .sidebar { position: fixed; z-index: 40; transform: translateX(-100%); }
-          .main { padding: 18px 16px 60px; }
-        }
-      `}</style>
+      {/* Mobile bottom nav */}
+      <nav className="mobile-nav">
+        {NAV.slice(0, 1).map((n) => <MobileTab key={n.key} n={n} active={active} onNav={onNav} />)}
+        {NAV.slice(1, 2).map((n) => <MobileTab key={n.key} n={n} active={active} onNav={onNav} />)}
+        <button className="mobile-add" onClick={onAdd} aria-label="Add trade">+</button>
+        {NAV.slice(2).map((n) => <MobileTab key={n.key} n={n} active={active} onNav={onNav} />)}
+      </nav>
     </div>
+  )
+}
+
+function MobileTab({ n, active, onNav }) {
+  const on = active === n.key
+  return (
+    <button onClick={() => onNav(n.key)}
+      style={{
+        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+        padding: '8px 0', fontSize: 10.5, fontWeight: 600,
+        color: on ? 'var(--mint)' : 'var(--text-3)',
+      }}>
+      <span style={{ fontSize: 18 }}>{n.icon}</span>
+      {n.label}
+    </button>
+  )
+}
+
+function UserAvatar() {
+  const { user, signOut, requiresAuth } = useAuth()
+  if (!requiresAuth || !user) return null
+  const meta = user.user_metadata || {}
+  const avatar = meta.avatar_url || meta.picture
+  const name = meta.full_name || meta.name || user.email?.split('@')[0] || 'T'
+  return (
+    <button onClick={signOut} title="Sign out">
+      {avatar ? (
+        <img src={avatar} alt="" referrerPolicy="no-referrer"
+          style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
+      ) : (
+        <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(140deg,#2fd48a,#128a56)', color: '#04140d', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{name[0]?.toUpperCase()}</div>
+      )}
+    </button>
   )
 }
 
