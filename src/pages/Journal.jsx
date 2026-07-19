@@ -4,7 +4,7 @@ import TradeTable from '../components/TradeTable'
 import { StatCard } from '../components/widgets'
 import { computeStats, fmtMoney, fmtPct } from '../lib/stats'
 
-export default function Journal({ trades, onAdd, onDelete }) {
+export default function Journal({ trades, onAdd, onDelete, onEdit }) {
   const [q, setQ] = useState('')
   const [side, setSide] = useState('All')
 
@@ -45,7 +45,7 @@ export default function Journal({ trades, onAdd, onDelete }) {
           </div>
         }
       >
-        <TradeTable trades={filtered} onDelete={onDelete} />
+        <TradeTable trades={filtered} onDelete={onDelete} onEdit={onEdit} />
       </Panel>
     </>
   )

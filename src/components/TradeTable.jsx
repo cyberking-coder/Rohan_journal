@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { net, fmtMoney, fmtRR } from '../lib/stats'
 import { StarRating, PnlPill } from './widgets'
 
-export default function TradeTable({ trades, onDelete }) {
+export default function TradeTable({ trades, onDelete, onEdit }) {
   const [lightbox, setLightbox] = useState(null)
   const rows = [...trades].sort((a, b) => new Date(b.traded_at) - new Date(a.traded_at))
 
@@ -66,10 +66,16 @@ export default function TradeTable({ trades, onDelete }) {
               </td>
               <td style={cell}><PnlPill value={net(t)} /></td>
               <td style={cell}>
-                {onDelete && (
-                  <button onClick={() => onDelete(t.id)} title="Delete"
-                    style={{ color: 'var(--text-3)', fontSize: 15, padding: 4 }}>✕</button>
-                )}
+                <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                  {onEdit && (
+                    <button onClick={() => onEdit(t)} title="Edit"
+                      style={{ color: 'var(--text-3)', fontSize: 14, padding: 4 }}>✎</button>
+                  )}
+                  {onDelete && (
+                    <button onClick={() => onDelete(t.id)} title="Delete"
+                      style={{ color: 'var(--text-3)', fontSize: 15, padding: 4 }}>✕</button>
+                  )}
+                </div>
               </td>
             </motion.tr>
           ))}

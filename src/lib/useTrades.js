@@ -67,6 +67,23 @@ export function useTrades(userId = null) {
     return { data, error }
   }, [userId])
 
+  const updateTrade = useCallback(async (id, changes) => {
+    const sortFn = (a, b) => new Date(a.traded_at) - new Date(b.traded_at)
+    if (!isSupabaseConfigured) {
+      setTrades((prev) => {
+        const next = prev.map((t) => (t.id === id ? { ...t, ...changes } : t)).sort(sortFn)
+        saveLocal(next)
+        return next
+      })
+      return { error: null }
+    }
+    const { data, error } = await supabase.from(TABLE).update(changes).eq('id', id).select().single()
+    if (!error && data) {
+      setTrades((prev) => prev.map((t) => (t.id === id ? data : t)).sort(sortFn))
+    }
+    return { data, error }
+  }, [])
+
   const deleteTrade = useCallback(async (id) => {
     if (!isSupabaseConfigured) {
       setTrades((prev) => {
@@ -80,5 +97,5 @@ export function useTrades(userId = null) {
     setTrades((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  return { trades, loading, error, addTrade, deleteTrade, refetch: fetchTrades, isSupabaseConfigured }
+  return { trades, loading, error, addTrade, updateTrade, deleteTrade, refetch: fetchTrades, isSupabaseConfigured }
 }

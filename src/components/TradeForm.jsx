@@ -23,7 +23,8 @@ function Labeled({ label, hint, children }) {
   )
 }
 
-export default function TradeForm({ open, onClose, onSubmit, userId }) {
+export default function TradeForm({ open, onClose, onSubmit, userId, initial = null }) {
+  const isEdit = Boolean(initial)
   const [form, setForm] = useState(blank())
   const [rating, setRating] = useState(3)
   const [saving, setSaving] = useState(false)
@@ -100,12 +101,48 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
     setCustomSym(false); removeFile(); setErr(null)
   }
 
+  // Prefill when opening to edit an existing trade; reset for a new one.
+  useEffect(() => {
+    if (!open) return
+    if (initial) {
+      setForm({
+        symbol: initial.symbol || 'XAUUSD',
+        side: initial.side || 'Long',
+        strategy: initial.strategy || STRATEGIES[0],
+        session: initial.session || 'New York',
+        entry: initial.entry ?? '', exit: initial.exit ?? '', sl: '', tp: '',
+        qty: initial.qty ?? '0.10',
+        pnl: initial.pnl ?? '',
+        fees: initial.fees ?? '2',
+        rr: initial.rr ? fmtRR(initial.rr) : '',
+        contractSize: String(contractSizeFor(initial.symbol) || 100),
+        notes: initial.notes || '',
+        traded_at: initial.traded_at
+          ? new Date(initial.traded_at).toISOString().slice(0, 16)
+          : new Date().toISOString().slice(0, 16),
+      })
+      setRating(initial.rating || 3)
+      setPnlTouched(true)  // keep the stored P&L
+      setRrTouched(true)   // keep the stored R:R
+      setCsTouched(false)
+      setCustomSym(!ASSET_GROUPS.some((g) => g.items.includes(initial.symbol)))
+      setFile(null)
+      setPreview(initial.screenshot_url || null)
+      setErr(null)
+    } else {
+      resetAll()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initial])
+
   async function submit(e) {
     e.preventDefault()
     setSaving(true)
     setErr(null)
     try {
-      let screenshot_url = null
+      // Keep the existing screenshot on edit unless a new one is picked or it
+      // was removed (preview cleared).
+      let screenshot_url = preview ? (initial?.screenshot_url || null) : null
       if (file) screenshot_url = await uploadScreenshot(file, userId)
 
       const record = {
@@ -159,8 +196,8 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
               <div>
-                <div className="eyebrow">New entry</div>
-                <h2 style={{ fontFamily: 'var(--display)', fontSize: 22, marginTop: 4 }}>Log a Trade</h2>
+                <div className="eyebrow">{isEdit ? 'Edit entry' : 'New entry'}</div>
+                <h2 style={{ fontFamily: 'var(--display)', fontSize: 22, marginTop: 4 }}>{isEdit ? 'Edit Trade' : 'Log a Trade'}</h2>
               </div>
               <button type="button" onClick={onClose} style={{ fontSize: 22, color: 'var(--text-3)' }}>✕</button>
             </div>
@@ -303,7 +340,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId }) {
                   background: 'linear-gradient(120deg, #3ee39a, #23b978)', color: '#04140d',
                   opacity: saving ? 0.7 : 1,
                 }}
-              >{saving ? 'Saving…' : 'Save Trade'}</motion.button>
+              >{saving ? 'Saving…' : isEdit ? 'Update Trade' : 'Save Trade'}</motion.button>
             </div>
           </motion.form>
         </motion.div>

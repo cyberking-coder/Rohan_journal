@@ -21,9 +21,12 @@ export default function App() {
 function Journalized({ userId }) {
   const [page, setPage] = useState('dashboard')
   const [formOpen, setFormOpen] = useState(false)
-  const { trades, loading, error, addTrade, deleteTrade, isSupabaseConfigured } = useTrades(userId)
+  const [editing, setEditing] = useState(null)
+  const { trades, loading, error, addTrade, updateTrade, deleteTrade, isSupabaseConfigured } = useTrades(userId)
 
-  const openForm = () => setFormOpen(true)
+  const openForm = () => { setEditing(null); setFormOpen(true) }
+  const openEdit = (trade) => { setEditing(trade); setFormOpen(true) }
+  const submitTrade = (record) => (editing ? updateTrade(editing.id, record) : addTrade(record))
 
   return (
     <Shell active={page} onNav={setPage} onAdd={openForm} isDemo={!isSupabaseConfigured}>
@@ -47,13 +50,13 @@ function Journalized({ userId }) {
             transition={{ duration: 0.3 }}
           >
             {page === 'dashboard' && <Dashboard trades={trades} onAdd={openForm} />}
-            {page === 'journal' && <Journal trades={trades} onAdd={openForm} onDelete={deleteTrade} />}
+            {page === 'journal' && <Journal trades={trades} onAdd={openForm} onDelete={deleteTrade} onEdit={openEdit} />}
             {page === 'analysis' && <Analysis trades={trades} />}
           </motion.div>
         </AnimatePresence>
       )}
 
-      <TradeForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={addTrade} userId={userId} />
+      <TradeForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={submitTrade} userId={userId} initial={editing} />
     </Shell>
   )
 }
