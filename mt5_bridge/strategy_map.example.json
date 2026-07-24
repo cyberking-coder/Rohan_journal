@@ -1,0 +1,17 @@
+{
+  "_comment": "Copy this to strategy_map.json and edit. 'magic' maps EA magic numbers (as strings) to a strategy; 'comment' maps a case-insensitive substring found in the order comment to a strategy. Resolution order: magic -> comment substring -> raw comment -> 'Unassigned'.",
+  "magic": {
+    "101": "Levels + M5 QML + Engulfing",
+    "102": "Levels + M5 TJL2 + Engulfing",
+    "103": "Levels + M5 TJL1 + Engulfing",
+    "104": "TRC",
+    "105": "SMT"
+  },
+  "comment": {
+    "QML": "Levels + M5 QML + Engulfing",
+    "TJL2": "Levels + M5 TJL2 + Engulfing",
+    "TJL1": "Levels + M5 TJL1 + Engulfing",
+    "TRC": "TRC",
+    "SMT": "SMT"
+  }
+}

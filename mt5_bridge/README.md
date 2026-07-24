@@ -13,8 +13,8 @@ editable.
 
 symbol · side (long/short) · entry & exit price · lots · gross P&L ·
 commission + swap (as fees) · stop-loss / take-profit · **R:R** (auto from
-SL/TP) · session (from close time) · close time. Strategy is set to
-`Unassigned` so you can categorise it later with the journal's edit button.
+SL/TP) · session (from close time) · close time · **strategy** (auto-mapped
+from the order's magic number / comment — see below).
 
 Trades are de-duplicated by MT5 **position ticket**, so re-running never creates
 duplicates.
@@ -59,6 +59,22 @@ python sync.py --once     # one sync then exit
 
 Leave it running while you trade. Each closed position shows up in the journal
 within a minute. Adjust `POLL_SECONDS` / `LOOKBACK_DAYS` in `.env` if needed.
+
+## Auto-assigning a strategy
+
+Instead of leaving imports as `Unassigned`, the bridge can label each trade from
+its MT5 **magic number** or **order comment**.
+
+1. Copy `strategy_map.example.json` to `strategy_map.json`.
+2. Edit the two maps:
+   - `magic`: EA magic number (as a string) → strategy name.
+   - `comment`: a case-insensitive substring of the order comment → strategy name.
+3. Re-run the sync.
+
+Resolution order per trade: **magic match → comment substring → raw comment →
+`Unassigned`**. So if you type `QML` in the order comment when placing a trade,
+it lands in the journal already tagged `Levels + M5 QML + Engulfing`. Any trade
+that doesn't match still comes in and can be edited in the journal.
 
 ## Notes & limits
 

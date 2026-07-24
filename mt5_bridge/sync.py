@@ -10,6 +10,7 @@ Setup and usage: see mt5_bridge/README.md
 
 import os
 import sys
+import json
 import time
 import argparse
 from datetime import datetime, timedelta, timezone
@@ -38,6 +39,42 @@ MT5_PASSWORD = os.environ.get("MT5_PASSWORD")
 MT5_SERVER = os.environ.get("MT5_SERVER")
 
 CURSOR_FILE = os.path.join(os.path.dirname(__file__), ".mt5_cursor")
+MAP_FILE = os.path.join(os.path.dirname(__file__), "strategy_map.json")
+
+
+def load_strategy_map():
+    """Optional magic-number / comment -> strategy mapping."""
+    for path in (MAP_FILE, MAP_FILE.replace(".json", ".example.json")):
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    m = json.load(f)
+                return {
+                    "magic": {str(k): v for k, v in (m.get("magic") or {}).items()},
+                    "comment": m.get("comment") or {},
+                }
+            except Exception as e:
+                print("Could not read strategy map:", e)
+            break
+    return {"magic": {}, "comment": {}}
+
+
+STRATEGY_MAP = load_strategy_map()
+
+
+def resolve_strategy(magic, comment):
+    magic = str(magic or "")
+    comment = (comment or "").strip()
+    # 1) exact magic-number match
+    if magic and magic in STRATEGY_MAP["magic"]:
+        return STRATEGY_MAP["magic"][magic]
+    # 2) comment substring match (case-insensitive)
+    low = comment.lower()
+    for key, strat in STRATEGY_MAP["comment"].items():
+        if key.lower() in low:
+            return strat
+    # 3) fall back to the raw comment, else Unassigned
+    return comment or "Unassigned"
 
 
 def require_config():
@@ -128,15 +165,23 @@ def build_trades(from_dt, to_dt):
         # planned SL/TP from the opening order, if available
         sl = tp = None
         rr = 0.0
+        order_magic = order_comment = None
         orders = mt5.history_orders_get(position=pid)
         if orders:
             o = orders[0]
             sl = o.sl or None
             tp = o.tp or None
+            order_magic = getattr(o, "magic", None)
+            order_comment = getattr(o, "comment", None)
             if sl and tp:
                 risk = abs(entry_px - sl)
                 if risk:
                     rr = round(abs(tp - entry_px) / risk, 2)
+
+        # strategy from magic number / comment (order first, then opening deal)
+        magic = order_magic if order_magic else getattr(first_in, "magic", None)
+        comment = order_comment or getattr(first_in, "comment", None)
+        strategy = resolve_strategy(magic, comment)
 
         close_dt = datetime.fromtimestamp(last_out.time, tz=timezone.utc)
         # 'fees' in the app is subtracted from pnl for net; commission/swap are
@@ -149,7 +194,7 @@ def build_trades(from_dt, to_dt):
             "source": "mt5",
             "symbol": first_in.symbol,
             "side": side,
-            "strategy": "Unassigned",
+            "strategy": strategy,
             "session": session_for(close_dt.hour),
             "entry": round(entry_px, 5),
             "exit": round(exit_px, 5),

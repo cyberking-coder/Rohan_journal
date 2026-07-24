@@ -1,3 +1,4 @@
 .env
 .mt5_cursor
 __pycache__/
+strategy_map.json
