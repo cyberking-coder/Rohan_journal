@@ -228,6 +228,17 @@ The repo includes `vercel.json` (framework `vite`, output `dist`, SPA rewrites).
 
 ---
 
+## MetaTrader 5 auto-sync (optional)
+
+Automatically log closed MT5 trades into the journal. A small Windows-side Python
+bridge reads your terminal's closed positions and pushes them to the same
+Supabase database. See [`mt5_bridge/README.md`](mt5_bridge/README.md).
+
+- Imports symbol, side, entry/exit, lots, P&L, commission+swap, SL/TP, auto R:R.
+- De-duplicated by MT5 position ticket; imported trades show an **MT5** badge and
+  stay fully editable (e.g. to assign a strategy).
+- Requires `supabase/mt5.sql` and your account ID (copyable from the sidebar).
+
 ## Design system
 
 - **Palette:** near-black charcoal (`#0a0d0c`) with a mint-green accent

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../lib/AuthContext'
 
@@ -146,28 +147,46 @@ function UserCard() {
   const name = meta.full_name || meta.name || user.email?.split('@')[0] || 'Trader'
   const email = user.email || ''
   const avatar = meta.avatar_url || meta.picture
+  const [copied, setCopied] = useState(false)
+
+  const copyId = () => {
+    navigator.clipboard?.writeText(user.id).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+      display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px',
       border: '1px solid var(--stroke)', borderRadius: 12, background: 'var(--card)',
     }}>
-      {avatar ? (
-        <img src={avatar} alt="" referrerPolicy="no-referrer"
-          style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }} />
-      ) : (
-        <div style={{
-          width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'linear-gradient(140deg,#2fd48a,#128a56)', color: '#04140d', fontWeight: 700, fontSize: 13,
-        }}>{name[0]?.toUpperCase()}</div>
-      )}
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
-        <div style={{ fontSize: 10.5, color: 'var(--text-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{email}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {avatar ? (
+          <img src={avatar} alt="" referrerPolicy="no-referrer"
+            style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }} />
+        ) : (
+          <div style={{
+            width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'linear-gradient(140deg,#2fd48a,#128a56)', color: '#04140d', fontWeight: 700, fontSize: 13,
+          }}>{name[0]?.toUpperCase()}</div>
+        )}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+          <div style={{ fontSize: 10.5, color: 'var(--text-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{email}</div>
+        </div>
+        <button onClick={signOut} title="Sign out"
+          style={{ color: 'var(--text-3)', fontSize: 16, padding: 4, flexShrink: 0 }}>⎋</button>
       </div>
-      <button onClick={signOut} title="Sign out"
-        style={{ color: 'var(--text-3)', fontSize: 16, padding: 4, flexShrink: 0 }}>⎋</button>
+      <button onClick={copyId} title="Copy your account ID (for the MT5 bridge)"
+        style={{
+          fontSize: 10, fontFamily: 'var(--mono)', color: copied ? 'var(--mint)' : 'var(--text-3)',
+          textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+        <span>{copied ? '✓ copied' : `ID ${user.id.slice(0, 8)}…`}</span>
+        {!copied && <span style={{ opacity: 0.6 }}>⧉</span>}
+      </button>
     </div>
   )
 }

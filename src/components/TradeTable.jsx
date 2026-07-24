@@ -41,7 +41,17 @@ export default function TradeTable({ trades, onDelete, onEdit }) {
                 <div style={{ fontSize: 13 }}>{new Date(t.traded_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{new Date(t.traded_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</div>
               </td>
-              <td style={{ ...cell, fontWeight: 600, fontFamily: 'var(--mono)' }}>{t.symbol}</td>
+              <td style={{ ...cell, fontWeight: 600, fontFamily: 'var(--mono)' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {t.symbol}
+                  {t.source === 'mt5' && (
+                    <span title="Auto-imported from MetaTrader 5" style={{
+                      fontFamily: 'var(--sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
+                      color: 'var(--mint)', background: 'rgba(47,212,138,0.12)', padding: '2px 5px', borderRadius: 5,
+                    }}>MT5</span>
+                  )}
+                </span>
+              </td>
               <td style={cell}>
                 <span style={{
                   fontSize: 11.5, padding: '3px 9px', borderRadius: 7, fontWeight: 600,
