@@ -33,8 +33,12 @@ create index if not exists trades_user_idx on public.trades (user_id);
 -- Row Level Security: each user only sees their own trades.
 alter table public.trades enable row level security;
 
--- If you are not using auth yet and want the anon key to read/write freely,
--- comment out the policies below and use the permissive one at the bottom.
+-- Drop-then-create so this script is safe to re-run.
+drop policy if exists "own trades - select" on public.trades;
+drop policy if exists "own trades - insert" on public.trades;
+drop policy if exists "own trades - update" on public.trades;
+drop policy if exists "own trades - delete" on public.trades;
+
 create policy "own trades - select" on public.trades
   for select using (auth.uid() = user_id);
 create policy "own trades - insert" on public.trades
