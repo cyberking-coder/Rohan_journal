@@ -73,10 +73,11 @@ cheap high-value work lands before the expensive infrastructure work.
 - ✅ **Forex Market Hours** — 12h/24h toggle, live "now" line, 4 city sessions (Sydney/Tokyo/London/NY), weekend handling, volume heuristic, "Best Times to Trade" cards rendered in the viewer's timezone.
 - ✅ Instrument pip config — `src/lib/pips.js`, kept separate from `instruments.js` (contract sizes for P&L) since it answers a different question. Rate-dependent pairs are marked approximate rather than presenting a stale number as fact.
 
-### Phase 3 — Journal & Trades to spec
-- Journal split-pane: left list (All / Journaled / Pending tabs with counts, search, date filter, sort, NEW badges) + right detail pane.
-- The 5 structured journal fields: Pre-Trade Analysis, Post-Trade Review, Emotions, Lessons Learned, plus planned R:R (two inputs) and a 1–10 rating slider.
-- Trades page: account switcher pill with privacy eye-toggle, Sync / Disconnect / Clear All / Add Trade actions, full history table, share-trade action, synced trades non-deletable.
+### Phase 3 — Journal & Trades to spec ✅ **Done**
+- ✅ Journal split-pane: left list (All / Journaled / Pending tabs with counts, search, date filter, sort, NEW badges) + right detail pane with a completeness meter.
+- ✅ The 5 structured journal fields: Pre-Trade Analysis, Post-Trade Review, Emotions, Lessons Learned, plus planned R:R (two inputs) and a 1–10 rating slider — `supabase/phase3.sql`, `src/lib/journal.js`.
+- ✅ Trades page: account switcher with privacy eye-toggle, Clear All (typed confirmation), full history table, copy-trade-summary action, synced trades non-deletable — `src/pages/Trades.jsx`, `src/lib/accounts.js`.
+- ⏸ Sync / Disconnect are shown disabled: they need the broker bridge from phase 5. Sharing to a public URL is phase 9 (Trader POV); copying a trade summary is the part that can be built honestly today.
 
 ### Phase 4 — Dashboard & Settings
 - Dashboard: 4 stat cards (Total / Unrealized / Realized / Win Rate), period-tabbed performance chart, monthly P&L strip, bottom news ticker.

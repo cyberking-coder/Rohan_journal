@@ -85,23 +85,6 @@ export function HexStat({ value, label, delay = 0 }) {
   )
 }
 
-export function StarRating({ value = 0, onChange, size = 16 }) {
-  return (
-    <div style={{ display: 'flex', gap: 3 }}>
-      {[1, 2, 3, 4, 5].map((s) => (
-        <button
-          key={s}
-          type="button"
-          onClick={onChange ? () => onChange(s) : undefined}
-          style={{ cursor: onChange ? 'pointer' : 'default', lineHeight: 1, fontSize: size, color: s <= value ? 'var(--mint)' : 'var(--track-2)' }}
-        >
-          ★
-        </button>
-      ))}
-    </div>
-  )
-}
-
 export function MiniStat({ icon, label, value, accent }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

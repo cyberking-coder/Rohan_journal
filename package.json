@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node test/analytics.test.mjs && node test/tools.test.mjs",
+    "test": "node test/analytics.test.mjs && node test/tools.test.mjs && node test/journal.test.mjs",
     "start": "serve -s dist -l tcp://0.0.0.0:${PORT:-3000}"
   },
   "dependencies": {

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { StarRating } from './widgets'
+import RatingSlider from './RatingSlider'
 import { uploadScreenshot } from '../lib/storage'
 import { contractSizeFor, computePnl, ASSET_GROUPS, STRATEGIES } from '../lib/instruments'
-import { parseRR, fmtRR } from '../lib/stats'
+import { parseRR, fmtRR, ratingOf } from '../lib/stats'
 
 const SESSIONS = ['London', 'New York', 'Asia', 'Overlap']
 const CUSTOM = '__custom__'
@@ -26,7 +26,8 @@ function Labeled({ label, hint, children }) {
 export default function TradeForm({ open, onClose, onSubmit, userId, initial = null }) {
   const isEdit = Boolean(initial)
   const [form, setForm] = useState(blank())
-  const [rating, setRating] = useState(3)
+  // 1-10, matching the journal's rating scale (see supabase/phase3.sql).
+  const [rating, setRating] = useState(6)
   const [saving, setSaving] = useState(false)
   const [pnlTouched, setPnlTouched] = useState(false)
   const [csTouched, setCsTouched] = useState(false)
@@ -97,7 +98,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId, initial = n
   }
 
   function resetAll() {
-    setForm(blank()); setRating(3); setPnlTouched(false); setCsTouched(false); setRrTouched(false); setAutoCalc(false)
+    setForm(blank()); setRating(6); setPnlTouched(false); setCsTouched(false); setRrTouched(false); setAutoCalc(false)
     setCustomSym(false); removeFile(); setErr(null)
   }
 
@@ -121,7 +122,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId, initial = n
           ? new Date(initial.traded_at).toISOString().slice(0, 16)
           : new Date().toISOString().slice(0, 16),
       })
-      setRating(initial.rating || 3)
+      setRating(ratingOf(initial) ?? 6)
       setPnlTouched(true)  // keep the stored P&L
       setRrTouched(true)   // keep the stored R:R
       setCsTouched(false)
@@ -156,7 +157,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId, initial = n
         pnl: parseFloat(form.pnl) || 0,
         fees: parseFloat(form.fees) || 0,
         rr: parseRR(form.rr),
-        rating,
+        journal_rating: rating,
         notes: form.notes,
         screenshot_url,
         traded_at: new Date(form.traded_at).toISOString(),
@@ -295,7 +296,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId, initial = n
 
             <div style={{ marginTop: 14 }}>
               <label style={labelStyle}>Rating</label>
-              <div style={{ paddingTop: 4 }}><StarRating value={rating} onChange={setRating} size={24} /></div>
+              <div style={{ paddingTop: 6 }}><RatingSlider value={rating} onChange={setRating} /></div>
             </div>
 
             {/* Screenshot */}

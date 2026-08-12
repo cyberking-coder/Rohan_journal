@@ -97,5 +97,25 @@ export function useTrades(userId = null) {
     setTrades((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  return { trades, loading, error, addTrade, updateTrade, deleteTrade, refetch: fetchTrades, isSupabaseConfigured }
+  // Deletes every trade for this user. Synced rows are included: the Trades
+  // page's "Clear All" is explicitly a wipe, not a per-row delete, and the
+  // dialog says so.
+  const clearAllTrades = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setTrades([])
+      saveLocal([])
+      return { error: null }
+    }
+    // Scope the delete explicitly rather than relying on RLS alone — a missing
+    // policy would otherwise turn this into a much bigger delete.
+    if (!userId) return { error: 'Not signed in' }
+    const { error } = await supabase.from(TABLE).delete().eq('user_id', userId)
+    if (!error) setTrades([])
+    return { error }
+  }, [userId])
+
+  return {
+    trades, loading, error, addTrade, updateTrade, deleteTrade, clearAllTrades,
+    refetch: fetchTrades, isSupabaseConfigured,
+  }
 }

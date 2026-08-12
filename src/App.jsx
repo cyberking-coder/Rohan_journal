@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import Journal from './pages/Journal'
 import Analysis from './pages/Analysis'
 import Tools from './pages/Tools'
+import Trades from './pages/Trades'
 import ComingSoon from './pages/ComingSoon'
 import Login from './pages/Login'
 import { useTrades } from './lib/useTrades'
@@ -28,7 +29,7 @@ function Journalized({ userId }) {
   const [formOpen, setFormOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [editing, setEditing] = useState(null)
-  const { trades, loading, error, addTrade, updateTrade, deleteTrade, isSupabaseConfigured } = useTrades(userId)
+  const { trades, loading, error, addTrade, updateTrade, deleteTrade, clearAllTrades, isSupabaseConfigured } = useTrades(userId)
 
   const openForm = useCallback(() => { setEditing(null); setFormOpen(true) }, [])
   const openEdit = (trade) => { setEditing(trade); setFormOpen(true) }
@@ -76,7 +77,8 @@ function Journalized({ userId }) {
             transition={{ duration: 0.3 }}
           >
             {view === 'dashboard' && <Dashboard trades={trades} onAdd={openForm} />}
-            {view === 'journal' && <Journal trades={trades} onAdd={openForm} onDelete={deleteTrade} onEdit={openEdit} />}
+            {view === 'journal' && <Journal trades={trades} onAdd={openForm} onUpdate={updateTrade} onEdit={openEdit} />}
+            {view === 'trades' && <Trades trades={trades} onAdd={openForm} onDelete={deleteTrade} onEdit={openEdit} onClearAll={clearAllTrades} />}
             {view === 'analysis' && <Analysis trades={trades} />}
             {view === 'tools' && <Tools />}
             {!current?.ready && <ComingSoon view={current} />}
