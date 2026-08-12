@@ -15,7 +15,7 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 | 1 | Analysis module to full spec (filters, 9 widgets, ~30-metric stats block) | ⏸ Not started |
 | 2 | Tools: Position Size Calculator, Forex Market Hours, tool shell | ✅ Done |
 | 3 | Journal split-pane + Trades page to spec | ✅ Done |
-| 4 | Dashboard widgets + Settings tabs & preferences | ⏸ Not started |
+| 4 | Dashboard widgets + Settings tabs & preferences | ✅ Done |
 | 5 | Broker accounts & auto-sync | ⛔ Blocked — needs a broker-bridge vendor decision |
 | 6 | Economic Calendar (Market) | ⛔ Blocked — needs a calendar data-feed decision |
 | 7 | AI Report generation + weekly quota | ⏸ Not started |
@@ -44,6 +44,77 @@ These block or shape later phases. None block Phases 0–4.
 ---
 
 ## Entries
+
+### 2026-08-12 — Phase 4 complete: Dashboard and Settings
+
+**Dashboard** (`src/pages/Dashboard.jsx`)
+- The spec's four headline cards: Total P&L, Unrealized, Realized, Win Rate
+  (with a progress bar). Unrealized reads a genuine zero until broker sync
+  reports open positions rather than being conjured from closed trades.
+- Period tabs 1D / 1W / 1M / 3M / ALL driving a performance chart whose fill
+  follows the direction of the period, so a losing stretch reads as one.
+- Monthly P&L strip across all time, and the existing coaching and detail
+  widgets kept below.
+
+**Settings** (`src/pages/Settings.jsx`)
+- Five tabs — Profile, MT5/MT4, Settings, Billing, Security — deep-linkable at
+  `?view=settings&tab=<key>`.
+- Preferences: dark mode, Streamer Mode, display currency, a 76-zone timezone
+  picker, dismissed-notification restore, and a Danger Zone that requires
+  typing DELETE.
+- Preferences persist to localStorage immediately and mirror to a `profiles`
+  row when Supabase is configured, so they follow the user across devices.
+
+**Streamer Mode is real, not decorative.** Money is rendered through a `Money`
+component that blurs under the setting and reveals on hover, so the trader can
+still read their own screen. Chart axes and tooltips are masked separately —
+blurring the whole chart would hide the shape, which is the useful part, but
+leaving the axis visible would give away the account size. A browser check
+confirms no `$` figure survives in any SVG text while the mode is on, and that
+they all return when it is off.
+
+**Decisions worth recording**
+- *Currency changes the symbol only.* The spec is explicit about this and it is
+  the right call: brokers report in the account's currency, and applying a
+  conversion without an FX rate feed would silently misstate every figure. The
+  setting is labelled to say so, and a test asserts the number never scales.
+- *The news ticker ships as chrome with an honest empty state.* Its events need
+  the phase 6 calendar feed. Scrolling invented headlines on a trading app
+  would be worse than useless — a trader might act on them.
+- *Notification toggles are disabled, not merely off.* Nothing can deliver a
+  push or a trade alert until phases 5 and 7, and a switch that silently does
+  nothing is worse than a greyed-out one that explains itself.
+- *Billing says there is nothing to bill.* No fake plan badge, no invented
+  "Elite" tier — the app has no paid tiers and takes no payment.
+- *Security is honest about Google.* Google is the only sign-in method
+  configured, so there is no password here to change; the tab offers
+  "sign out everywhere" (a real global token revocation) and says plainly that
+  account deletion needs a server-side admin call this app does not have.
+- *Compact money keeps decimals under $10.* Rounding a real -$0.20 month to
+  "-$0" reads as flat when it is not.
+
+**Verification**
+- `npm test` now runs 175 assertions across four files. The new
+  `test/prefs.test.mjs` covers currency symbols and the no-conversion
+  guarantee, compact formatting, timezone resolution and rendering (including
+  that every one of the 76 offered zones is a valid IANA name — a bad entry
+  would break every timestamp), monthly aggregation, and the realised/
+  unrealised split.
+- `npm run build` passes.
+- Browser pass: four headline cards, period tabs, monthly strip, honest ticker,
+  all five settings tabs with URL routing, streamer mode blurring money and
+  masking chart axes, currency switching to EUR, timezone shifting 13:20 UTC to
+  06:50 PM in Kolkata, preferences surviving a reload, and no horizontal scroll
+  on mobile. No console errors.
+- Two issues found and fixed during the pass: the monthly strip rendered
+  -$0.20 as "-$0", and Streamer Mode left chart axis labels and tooltips
+  readable.
+
+**To apply:** run `supabase/phase4.sql` in the Supabase SQL editor. Preferences
+work from localStorage without it; the table is what makes them follow you
+across devices.
+
+---
 
 ### 2026-08-12 — Phase 3 complete: Journal split-pane and Trades page
 

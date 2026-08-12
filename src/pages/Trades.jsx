@@ -5,7 +5,8 @@ import TradeHistoryTable from '../components/TradeHistoryTable'
 import {
   ALL_ACCOUNTS, accountSummary, buildAccounts, filterByAccount, maskIdentifier,
 } from '../lib/accounts'
-import { fmtMoney, fmtPct } from '../lib/stats'
+import { fmtPct } from '../lib/stats'
+import Money from '../components/Money'
 
 export default function Trades({ trades, onAdd, onDelete, onEdit, onClearAll }) {
   const [accountId, setAccountId] = useState(ALL_ACCOUNTS)
@@ -82,8 +83,7 @@ export default function Trades({ trades, onAdd, onDelete, onEdit, onClearAll }) 
 
         {/* Per-account summary strip */}
         <div className="account-summary">
-          <Summary label="Total P&L" value={fmtMoney(summary.pnl, 2)}
-            accent={summary.pnl >= 0 ? 'var(--mint)' : 'var(--red)'} />
+          <Summary label="Total P&L" value={<Money value={summary.pnl} colored />} />
           <Summary label="Trades" value={summary.trades} />
           <Summary label="Win Rate" value={fmtPct(summary.winRate, 1)} />
           <Summary label="Open Positions" value={summary.open} />

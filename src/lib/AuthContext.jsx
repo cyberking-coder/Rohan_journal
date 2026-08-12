@@ -31,9 +31,12 @@ export function AuthProvider({ children }) {
     })
   }
 
-  async function signOut() {
+  // `scope: 'global'` revokes every refresh token for the user, signing them
+  // out on all devices — that's what Settings → Security offers. The default
+  // 'local' only ends this browser's session.
+  async function signOut({ scope = 'local' } = {}) {
     if (!isSupabaseConfigured) return
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope })
     setSession(null)
   }
 

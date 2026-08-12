@@ -78,8 +78,7 @@ export const VIEWS = [
     key: 'settings',
     label: 'Settings',
     icon: '◍',
-    ready: false,
-    phase: 4,
+    ready: true,
     description: 'Profile, broker accounts, preferences and billing.',
   },
 ]

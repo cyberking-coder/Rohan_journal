@@ -36,6 +36,17 @@ function useChartColors() {
   return CHART_COLORS[theme] || CHART_COLORS.dark
 }
 
+// Chart axes and tooltips carry money too, so Streamer Mode has to reach them.
+// Blurring the whole chart would hide the shape, which is the part worth
+// seeing — so only the figures are masked.
+function useMoneyMask() {
+  const { streamerMode } = useTheme()
+  return {
+    axis: (fn) => (v) => (streamerMode ? '•••' : fn(v)),
+    tip: (text) => (streamerMode ? '•••••' : text),
+  }
+}
+
 function TipBox({ children }) {
   return (
     <div style={{
@@ -47,6 +58,7 @@ function TipBox({ children }) {
 
 export function EquityCurve({ data }) {
   const c = useChartColors()
+  const mask = useMoneyMask()
   return (
     <ResponsiveContainer width="100%" height={300}>
       <AreaChart data={data} margin={{ top: 10, right: 8, left: -12, bottom: 0 }}>
@@ -62,14 +74,14 @@ export function EquityCurve({ data }) {
         </defs>
         <CartesianGrid stroke={c.grid} vertical={false} />
         <XAxis dataKey="date" tick={{ fill: c.axis, fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={40} />
-        <YAxis tick={{ fill: c.axis, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+        <YAxis tick={{ fill: c.axis, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={mask.axis((v) => `$${(v / 1000).toFixed(0)}k`)} />
         <Tooltip
           content={({ active, payload, label }) =>
             active && payload?.length ? (
               <TipBox>
                 <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>{label}</div>
-                <div style={{ color: 'var(--mint)' }}>Net&nbsp;&nbsp;{fmtMoney(payload.find((p) => p.dataKey === 'net')?.value)}</div>
-                <div style={{ color: 'var(--text-2)' }}>Gross&nbsp;{fmtMoney(payload.find((p) => p.dataKey === 'gross')?.value)}</div>
+                <div style={{ color: 'var(--mint)' }}>Net&nbsp;&nbsp;{mask.tip(fmtMoney(payload.find((p) => p.dataKey === 'net')?.value))}</div>
+                <div style={{ color: 'var(--text-2)' }}>Gross&nbsp;{mask.tip(fmtMoney(payload.find((p) => p.dataKey === 'gross')?.value))}</div>
               </TipBox>
             ) : null
           }
@@ -83,19 +95,20 @@ export function EquityCurve({ data }) {
 
 export function PnlBars({ data, height = 190 }) {
   const c = useChartColors()
+  const mask = useMoneyMask()
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}>
         <CartesianGrid stroke={c.grid} vertical={false} />
         <XAxis dataKey="date" tick={{ fill: c.axis, fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={26} />
-        <YAxis tick={{ fill: c.axis, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+        <YAxis tick={{ fill: c.axis, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={mask.axis((v) => `$${v}`)} />
         <Tooltip
           cursor={{ fill: c.cursor }}
           content={({ active, payload, label }) =>
             active && payload?.length ? (
               <TipBox>
                 <div style={{ color: 'var(--text-3)', marginBottom: 2 }}>{label}</div>
-                <div style={{ color: payload[0].value >= 0 ? 'var(--mint)' : 'var(--red)' }}>{fmtMoney(payload[0].value)}</div>
+                <div style={{ color: payload[0].value >= 0 ? 'var(--mint)' : 'var(--red)' }}>{mask.tip(fmtMoney(payload[0].value))}</div>
               </TipBox>
             ) : null
           }
@@ -112,11 +125,12 @@ export function PnlBars({ data, height = 190 }) {
 
 export function SessionBars({ data }) {
   const c = useChartColors()
+  const mask = useMoneyMask()
   return (
     <ResponsiveContainer width="100%" height={Math.max(160, data.length * 46)}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
         <CartesianGrid stroke={c.grid} horizontal={false} />
-        <XAxis type="number" tick={{ fill: c.axis, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+        <XAxis type="number" tick={{ fill: c.axis, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={mask.axis((v) => `$${v}`)} />
         <YAxis type="category" dataKey="session" width={70} tick={{ fill: c.axisStrong, fontSize: 12 }} axisLine={false} tickLine={false} />
         <Tooltip
           cursor={{ fill: c.cursor }}
@@ -124,7 +138,7 @@ export function SessionBars({ data }) {
             active && payload?.length ? (
               <TipBox>
                 <div style={{ marginBottom: 2 }}>{payload[0].payload.session}</div>
-                <div style={{ color: payload[0].value >= 0 ? 'var(--mint)' : 'var(--red)' }}>{fmtMoney(payload[0].value)}</div>
+                <div style={{ color: payload[0].value >= 0 ? 'var(--mint)' : 'var(--red)' }}>{mask.tip(fmtMoney(payload[0].value))}</div>
                 <div style={{ color: 'var(--text-3)' }}>{payload[0].payload.count} trades · {payload[0].payload.winRate.toFixed(0)}% win</div>
               </TipBox>
             ) : null

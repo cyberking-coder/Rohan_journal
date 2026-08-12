@@ -8,6 +8,7 @@ import Journal from './pages/Journal'
 import Analysis from './pages/Analysis'
 import Tools from './pages/Tools'
 import Trades from './pages/Trades'
+import Settings from './pages/Settings'
 import ComingSoon from './pages/ComingSoon'
 import Login from './pages/Login'
 import { useTrades } from './lib/useTrades'
@@ -81,6 +82,7 @@ function Journalized({ userId }) {
             {view === 'trades' && <Trades trades={trades} onAdd={openForm} onDelete={deleteTrade} onEdit={openEdit} onClearAll={clearAllTrades} />}
             {view === 'analysis' && <Analysis trades={trades} />}
             {view === 'tools' && <Tools />}
+            {view === 'settings' && <Settings trades={trades} onClearAll={clearAllTrades} />}
             {!current?.ready && <ComingSoon view={current} />}
           </motion.div>
         </AnimatePresence>

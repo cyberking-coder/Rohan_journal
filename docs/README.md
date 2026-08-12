@@ -79,10 +79,11 @@ cheap high-value work lands before the expensive infrastructure work.
 - ✅ Trades page: account switcher with privacy eye-toggle, Clear All (typed confirmation), full history table, copy-trade-summary action, synced trades non-deletable — `src/pages/Trades.jsx`, `src/lib/accounts.js`.
 - ⏸ Sync / Disconnect are shown disabled: they need the broker bridge from phase 5. Sharing to a public URL is phase 9 (Trader POV); copying a trade summary is the part that can be built honestly today.
 
-### Phase 4 — Dashboard & Settings
-- Dashboard: 4 stat cards (Total / Unrealized / Realized / Win Rate), period-tabbed performance chart, monthly P&L strip, bottom news ticker.
-- Settings tab strip: Profile / MT5-MT4 / Settings / Billing / Security.
-- Preferences: profile visibility, dark mode, **Streamer Mode** (blur $ values), notification toggles, currency display, ~70-zone timezone picker, dismissed-notifications restore, Danger Zone (clear all trading data).
+### Phase 4 — Dashboard & Settings ✅ **Done**
+- ✅ Dashboard: 4 headline cards (Total P&L / Unrealized / Realized / Win Rate), period tabs (1D/1W/1M/3M/ALL), direction-coloured performance chart, monthly P&L strip.
+- ✅ Settings tab strip: Profile / MT5-MT4 / Settings / Billing / Security, deep-linkable at `?view=settings&tab=<key>`.
+- ✅ Preferences: profile visibility, dark mode, **Streamer Mode**, currency display, 76-zone timezone picker, dismissed-notifications restore, Danger Zone — `src/lib/theme.jsx`, `src/lib/format.js`, `supabase/phase4.sql`.
+- ⏸ The news ticker renders its chrome with an honest empty state: the events need the phase 6 calendar feed, and inventing headlines on a trading app would be actively dangerous. Notification toggles are disabled because nothing can deliver them until phases 5/7. Billing is empty because there are no paid tiers (phase 11).
 
 ### Phase 5 — Broker accounts & sync *(blocked on a vendor decision)*
 - `broker_accounts` table; multi-account per user; connect / disconnect / sync / favourite / duplicate.
