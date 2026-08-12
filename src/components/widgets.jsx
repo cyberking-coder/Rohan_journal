@@ -34,7 +34,7 @@ export function DonutGauge({ value = 0, label = 'Win rate', size = 132 }) {
   return (
     <div style={{ position: 'relative', width: size, height: size }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size / 2} cy={size / 2} r={r} stroke="#1c2523" strokeWidth={stroke} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={r} stroke="var(--track)" strokeWidth={stroke} fill="none" />
         <motion.circle
           cx={size / 2} cy={size / 2} r={r}
           stroke="url(#gaugeGrad)" strokeWidth={stroke} fill="none"
@@ -73,7 +73,7 @@ export function HexStat({ value, label, delay = 0 }) {
       <div style={{
         width: 84, height: 96,
         clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-        background: 'linear-gradient(160deg, #17201e, #0f1514)',
+        background: 'var(--hex-bg)',
         border: '1px solid var(--stroke)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: 'inset 0 0 24px rgba(47,212,138,0.08)',
@@ -93,7 +93,7 @@ export function StarRating({ value = 0, onChange, size = 16 }) {
           key={s}
           type="button"
           onClick={onChange ? () => onChange(s) : undefined}
-          style={{ cursor: onChange ? 'pointer' : 'default', lineHeight: 1, fontSize: size, color: s <= value ? 'var(--mint)' : '#2b3634' }}
+          style={{ cursor: onChange ? 'pointer' : 'default', lineHeight: 1, fontSize: size, color: s <= value ? 'var(--mint)' : 'var(--track-2)' }}
         >
           ★
         </button>

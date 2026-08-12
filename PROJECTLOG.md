@@ -1,0 +1,220 @@
+# Project Log
+
+Running record of work on the TradeFXBook parity effort.
+Newest entries at the top. See `docs/README.md` for the phase plan.
+
+**Legend:** ✅ done · 🚧 in progress · ⛔ blocked · ⏸ not started
+
+---
+
+## Phase status at a glance
+
+| Phase | Scope | Status |
+| --- | --- | --- |
+| 0 | Foundation: routing, shell/nav, top bar, schema superset, filterable stats core | ✅ Done |
+| 1 | Analysis module to full spec (filters, 9 widgets, ~30-metric stats block) | ⏸ Not started |
+| 2 | Tools: Position Size Calculator, Forex Market Hours, tool shell | ✅ Done |
+| 3 | Journal split-pane + Trades page to spec | ⏸ Not started |
+| 4 | Dashboard widgets + Settings tabs & preferences | ⏸ Not started |
+| 5 | Broker accounts & auto-sync | ⛔ Blocked — needs a broker-bridge vendor decision |
+| 6 | Economic Calendar (Market) | ⛔ Blocked — needs a calendar data-feed decision |
+| 7 | AI Report generation + weekly quota | ⏸ Not started |
+| 8 | Backtesting (candle replay) | ⏸ Not started |
+| 9 | Trader POV / shared read-only dashboards | ⏸ Not started |
+| 10 | Community (lounges, leaderboard, affiliate) | ⏸ Not started — scope not confirmed |
+| 11 | Billing (Stripe tiers) & Security tab | ⏸ Not started — scope not confirmed |
+
+---
+
+## Open decisions
+
+These block or shape later phases. None block Phases 0–4.
+
+1. **Broker sync vendor** — MetaApi.cloud (paid, cloud-native) vs. hosting the existing
+   `mt5_bridge/sync.py` on a Windows box vs. a custom EA + webhook bridge. Affects Phase 5.
+2. **Economic calendar feed** — which provider, and whether its licence permits
+   redisplay. Affects Phase 6 and the Dashboard news ticker.
+3. **Auth provider** — the spec documents Clerk; this repo uses Supabase Auth with RLS.
+   Recommendation: stay on Supabase Auth. Awaiting confirmation.
+4. **Scope of Community and Billing** — both add permanent operational and moderation
+   burden. Confirm whether this stays a personal journal or becomes a multi-tenant SaaS.
+5. **Analysis account scoping** — the live app appears to show all accounts' trades on the
+   Analysis page regardless of the active account. Decide: all-accounts or active-account.
+
+---
+
+## Entries
+
+### 2026-08-12 — Phase 2 complete: Tools module
+
+Built out of order — Phase 2 is stateless and depends on nothing in Phase 1.
+
+**Tool framework**
+- `src/lib/tools.js` — config-driven registry; adding a tool is a data change.
+- `src/pages/Tools.jsx` — grid with Popular/Live/Coming-Soon badges and
+  Available/Coming-Soon counters. Unbuilt tools name the phase that delivers them.
+- `src/components/ToolPageShell.jsx` — shared back-link/title/actions chrome.
+- Tools open at `?view=tools&tool=<id>` via a new `useQueryParam` hook, so each
+  tool is linkable and the back button steps out to the grid. The live app
+  doesn't change its URL here; this is deliberately better.
+
+**Position Size Calculator**
+- `position_size = (balance × risk%) / (sl_pips × pip_value_per_lot)`, with
+  standard/mini/micro lot outputs, risk amount and loss-at-stop.
+- Risk slider 0.5–5% with 5 presets and Conservative/Moderate/Aggressive zones;
+  live risk-amount readout as the slider moves.
+- 32-instrument dropdown grouped by category. The live app lists BTCUSD and
+  ETHUSD twice — a test asserts we have no duplicates.
+- Custom pip-value override for traders using their broker's exact figure.
+
+**Forex Market Hours**
+- 12h/24h toggle, live clock, "N sessions open" banner with flags.
+- Shared 24h UTC timeline with a live "now" line and per-city session bars.
+  Sydney wraps past midnight and is drawn as two segments — a single bar would
+  render as negative width.
+- Weekend handling: forex is shut from Fri 22:00 UTC to Sun 22:00 UTC, so a
+  session whose clock says "open" on a Saturday is correctly reported closed.
+- Volume heuristic (London+NY overlap = High), and "Best Times to Trade" cards
+  stored in UTC and converted to the viewer's local time.
+
+**Decisions worth recording**
+- *Two session models kept separate.* This tool uses four cities with real,
+  overlapping hours; the Analysis module (phase 1) uses three non-overlapping
+  sessions covering all 24h, because every trade must fall in exactly one
+  bucket. The spec flags the difference; merging them would break one or the other.
+- *Gold pip size shown as 0.10, not 0.01.* The live app displays pip size 0.01
+  **and** pip value $10/lot, which are mutually inconsistent on a 100oz contract
+  (0.01 there is $1/lot). The $10 pip value is what drives the maths and is
+  verified, so that is preserved exactly — the displayed pip size is corrected
+  to 0.10 so the two figures agree. Worth confirming against your broker.
+- *Rate-dependent pip values are marked approximate.* Pip value in USD is only
+  constant for USD-quoted pairs. JPY/CHF/CAD/AUD crosses, indices and crypto
+  carry an `approx` note stating the rate assumed, and the UI shows a warning
+  pointing at the custom-override field. Exact values need a live rate feed,
+  which arrives in phase 6.
+- *The two unnamed "coming soon" slots in the live app were left out.* A card
+  with no title tells the user nothing.
+
+**Verification**
+- `npm test` now runs 82 assertions across two files. The new
+  `test/tools.test.mjs` covers the calculator (including the spec's verified
+  example: $10,000 / 1% / 20 pips / XAUUSD → **0.50 lots**, 5 mini, 50 micro,
+  $100 risk), the invariant that loss-at-stop always equals intended risk,
+  null-not-NaN handling for bad input, no duplicate instruments, session
+  wrap-around, weekend closure and the volume heuristic.
+- `npm run build` passes.
+- Browser pass: grid renders 5 cards, tool opens and updates the URL, the
+  calculator produces 0.50 lots for the spec's inputs, custom pip toggle works,
+  back button returns to the grid, Market Hours shows the right open/closed
+  state and live now-line, 12h/24h toggles, deep links work, light theme is
+  clean, and mobile has no horizontal scroll on any of the three screens.
+  No console errors.
+
+---
+
+### 2026-08-12 — Phase 0 complete: foundation
+
+Everything below is code, verified in a browser and by a test run.
+
+**Routing (`?view=<key>`)**
+- `src/lib/views.js` — one list defining all 10 sections, which are built, and
+  which phase owns the rest. The sidebar, mobile nav, command palette and
+  router all read from it.
+- `src/lib/router.js` — query-param router replacing the old `useState` page
+  switch. Every section is now linkable and bookmarkable, and browser
+  back/forward work. Unknown `?view=` values fall back to Dashboard.
+
+**Shell and navigation**
+- Sidebar lists all 10 spec sections; the 7 unbuilt ones carry a "soon" badge
+  and route to `src/pages/ComingSoon.jsx`, which names the phase that delivers
+  them rather than dead-ending.
+- Mobile keeps a 4-slot tab bar (the built pages + quick-add); "More" opens the
+  palette, which lists everything.
+
+**Global top bar** (`src/components/TopBar.jsx`)
+- Section title, ⌘K/Ctrl-K search, theme toggle, live clock with timezone,
+  notifications bell, quick-add, and a profile menu (copy account ID, sign out).
+- The bell deliberately shows an empty state — there is no notification source
+  until trade alerts (phase 4) and broker sync (phase 5) exist.
+
+**Command palette** (`src/components/CommandPalette.jsx`)
+- ⌘K/Ctrl-K, fuzzy filter over sections and actions, arrow-key navigation,
+  Enter to run, Escape to close.
+
+**Light/dark theming**
+- `src/lib/theme.jsx` — dark by default, persisted to localStorage, applied as
+  `data-theme` on `<html>`. Streamer Mode state is plumbed here too, ready for
+  the phase 4 Settings UI to write to.
+- Full light palette added to `global.css`. This surfaced ~20 hardcoded dark
+  colours across charts, inputs, the win-rate donut and the R:R hexagons that
+  were invisible or unreadable in light mode; all are now tokens. Recharts
+  writes to SVG presentation attributes where `var()` is not legal, so
+  `charts.jsx` resolves its palette in JS from the active theme.
+
+**Filterable analytics core** (`src/lib/analytics.js`)
+- `filterTrades({ period, tradeType })` over the spec's 6 periods × 3 trade
+  types, plus `computeAnalytics` returning the full metric set phase 1 needs
+  (streaks, drawdown, session/day aggregates, hold times, profit-factor bands).
+- `stats.js` is untouched, so the existing pages keep working; phase 1 migrates
+  them onto this core.
+
+**Schema superset** (`supabase/phase0.sql`, safe to re-run)
+- Added `status` (open/closed), `opened_at` / `closed_at`, `broker_account_id`,
+  and indexes for the period filters. Existing rows are backfilled from
+  `traded_at`.
+- `is_deletable` is a **generated** column derived from `source`, so a synced
+  trade can never be marked deletable by accident.
+- `swap` made non-null with a 0 default.
+- Decision: `fees` stays the commission column rather than adding a second
+  `commission` field. Every existing UI and the MT5 bridge already write to it,
+  and two columns for one concept would drift apart. Documented via a SQL
+  `comment on column`.
+
+**Verification**
+- `npm run build` passes.
+- `npm test` (`test/analytics.test.mjs`) — 38 assertions reproducing the exact
+  figures the spec verified against the live app: total P&L -$170.69, win rate
+  10%, profit factor 0.23, expectancy -$17.07, avg winner $49.85, avg loser
+  -$24.50, R:R 1:2.03, win streak 1, loss streak 8, 3 trading days, avg daily
+  P&L -$56.90, avg losing day -$85.97, and the rest. All pass.
+- Browser smoke test across 10 behaviours: default route, 10-item sidebar,
+  navigation updating the URL, back button, deep-linking `?view=analysis`,
+  palette open/filter/Enter, theme toggle, theme persisting across reload,
+  invalid-view fallback, and the mobile layout. All pass, no console errors.
+- Two bugs found and fixed during verification: the top-bar clock rendered its
+  timezone as a superscript (the shared `.hide-mobile` class forces
+  `inline-flex`, which overrode the intended column layout), and the light
+  theme's chart/widget colours described above.
+
+**Deliberately not done in this phase:** no new widgets, no page redesigns. The
+existing Dashboard, Journal and Analysis pages render exactly as before — this
+phase only built the foundation they grow on.
+
+**To apply:** run `supabase/phase0.sql` in the Supabase SQL editor. No frontend
+change depends on it yet, so the app works before and after.
+
+---
+
+### 2026-08-12 — Spec reviewed, plan drafted
+- Read the full 24-page `TradeFXBook_Product_Specification_v2.pdf`: full-app overview
+  (§1–§7), the exhaustive **Analysis** module dev spec, and the exhaustive **Tools**
+  module dev spec.
+- Surveyed the current repo: React 18 + Vite SPA, Supabase (auth + Postgres + storage),
+  Recharts, Framer Motion, Vercel deploy, plus a Python `mt5_bridge/` MT5 sync script.
+  ~2,100 lines across `src/`; three pages today (Dashboard, Journal, Analysis); one
+  Supabase table (`public.trades`).
+- **Conclusion: the spec is implementable in this repo.** The analytics, journal and
+  tools work is extension of what already exists. The genuinely hard/costly items are
+  broker auto-sync (needs a vendor), the economic calendar (needs a data feed), and
+  backtesting (needs historical OHLC + a replay engine).
+- Wrote `docs/README.md` with a 12-phase breakdown and a feasibility table per spec area.
+- Created this log.
+- **No feature code written.** Planning only, as requested.
+
+---
+
+## How to update this log
+
+When a piece of work lands, add a dated entry at the top of **Entries** with what
+changed and why, flip the relevant row in the phase table, and move any decision that
+got answered out of **Open decisions** into the entry that recorded it.

@@ -70,7 +70,7 @@ export default function Analysis({ trades }) {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
             <InsightColumn title="Keep doing" icon="✓" color="var(--mint)" items={insights.keep} empty="Build a positive edge to see what's working." />
-            <InsightColumn title="Do more of" icon="▲" color="#8be0ff" items={insights.strengths} empty="No standout strengths yet." />
+            <InsightColumn title="Do more of" icon="▲" color="var(--info)" items={insights.strengths} empty="No standout strengths yet." />
             <InsightColumn title="Where to improve" icon="!" color="var(--amber)" items={insights.improvements} empty="Nothing is clearly hurting you — nice." />
           </div>
         )}
@@ -91,7 +91,7 @@ export default function Analysis({ trades }) {
             {ratingDist.map((r, i) => (
               <div key={r.rating} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 84 }}><StarRating value={r.rating} size={13} /></div>
-                <div style={{ flex: 1, height: 12, background: '#141b1a', borderRadius: 6, overflow: 'hidden' }}>
+                <div style={{ flex: 1, height: 12, background: 'var(--track)', borderRadius: 6, overflow: 'hidden' }}>
                   <motion.div initial={{ width: 0 }} animate={{ width: `${r.pct}%` }} transition={{ delay: 0.3 + i * 0.06, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
                     style={{ height: '100%', background: 'linear-gradient(90deg,#23b978,#3ee39a)', borderRadius: 6 }} />
                 </div>
@@ -147,7 +147,7 @@ function renderBold(text) {
 
 function InsightColumn({ title, icon, color, items, empty }) {
   return (
-    <div style={{ background: '#0e1413', border: '1px solid var(--stroke)', borderRadius: 14, padding: 16 }}>
+    <div style={{ background: 'var(--input-bg)', border: '1px solid var(--stroke)', borderRadius: 14, padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
         <span style={{
           width: 22, height: 22, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center',

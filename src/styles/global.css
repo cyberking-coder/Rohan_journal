@@ -1,4 +1,8 @@
-:root {
+/* Dark is the default theme; `data-theme="light"` on <html> swaps the palette.
+   Only the colour tokens change between themes — every component reads these
+   variables, so nothing hardcodes a theme-specific colour. */
+:root,
+:root[data-theme='dark'] {
   --bg: #0a0d0c;
   --bg-elev: #0f1413;
   --card: #121817;
@@ -16,6 +20,59 @@
   --red-dim: #7d2b2b;
   --amber: #ffcf6b;
   --shadow: 0 18px 50px -18px rgba(0, 0, 0, 0.75);
+  --glow: rgba(47, 212, 138, 0.14);
+  --glow-border: rgba(47, 212, 138, 0.34);
+  --skeleton-a: #141b1a;
+  --skeleton-b: #1c2523;
+  --scrollbar: #1d2725;
+  --scrollbar-hover: #26332f;
+  --topbar-bg: rgba(10, 13, 12, 0.82);
+  --sidebar-bg: linear-gradient(180deg, rgba(15, 20, 19, 0.6), transparent);
+  --page-glow-1: rgba(47, 212, 138, 0.06);
+  --page-glow-2: rgba(47, 212, 138, 0.045);
+  --input-bg: #0e1413;
+  --track: #1c2523;
+  --track-2: #2b3634;
+  --hex-bg: linear-gradient(160deg, #17201e, #0f1514);
+  --info: #8be0ff;
+}
+
+:root[data-theme='light'] {
+  --bg: #f4f7f5;
+  --bg-elev: #ffffff;
+  --card: #ffffff;
+  --card-2: #f7faf8;
+  --card-hover: #eef4f0;
+  --stroke: #dde5e0;
+  --stroke-soft: #e8eeea;
+  --text: #101815;
+  --text-2: #4d5c56;
+  --text-3: #7d8b84;
+  --mint: #14a86a;
+  --mint-2: #17bd77;
+  --mint-dim: #0d7a4c;
+  --red: #d64545;
+  --red-dim: #f0c4c4;
+  --amber: #b57d10;
+  --shadow: 0 14px 38px -20px rgba(16, 33, 26, 0.28);
+  --glow: rgba(20, 168, 106, 0.1);
+  --glow-border: rgba(20, 168, 106, 0.35);
+  --skeleton-a: #e9efeb;
+  --skeleton-b: #f3f7f4;
+  --scrollbar: #cfdad4;
+  --scrollbar-hover: #b9c7c0;
+  --topbar-bg: rgba(244, 247, 245, 0.86);
+  --sidebar-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.9), transparent);
+  --page-glow-1: rgba(20, 168, 106, 0.07);
+  --page-glow-2: rgba(20, 168, 106, 0.05);
+  --input-bg: #ffffff;
+  --track: #e4ebe7;
+  --track-2: #cdd8d2;
+  --hex-bg: linear-gradient(160deg, #ffffff, #eef3f0);
+  --info: #1f7fa8;
+}
+
+:root {
   --radius: 18px;
   --radius-sm: 12px;
   --sans: 'Inter', system-ui, sans-serif;
@@ -29,14 +86,15 @@ html, body, #root { height: 100%; max-width: 100%; overflow-x: clip; }
 
 body {
   background:
-    radial-gradient(1200px 600px at 80% -10%, rgba(47, 212, 138, 0.06), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, rgba(47, 212, 138, 0.045), transparent 55%),
+    radial-gradient(1200px 600px at 80% -10%, var(--page-glow-1), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, var(--page-glow-2), transparent 55%),
     var(--bg);
   color: var(--text);
   font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overflow-x: hidden;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
@@ -45,8 +103,8 @@ a { color: inherit; text-decoration: none; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #1d2725; border-radius: 20px; border: 2px solid var(--bg); }
-::-webkit-scrollbar-thumb:hover { background: #26332f; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 20px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
 
 .mono { font-family: var(--mono); }
 
@@ -69,10 +127,14 @@ a { color: inherit; text-decoration: none; }
     z-index: 40;
     padding: 12px 16px calc(12px);
     padding-top: max(12px, env(safe-area-inset-top));
-    background: rgba(10, 13, 12, 0.9);
+    background: var(--topbar-bg);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--stroke);
   }
+
+  /* The phone already has its own top bar with the logo and controls, so the
+     desktop bar would just be a second stacked header. */
+  .topbar { display: none !important; }
 
   .main {
     padding: 16px 14px calc(90px + env(safe-area-inset-bottom)) !important;
@@ -87,7 +149,7 @@ a { color: inherit; text-decoration: none; }
     bottom: 0;
     z-index: 40;
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-    background: rgba(10, 13, 12, 0.92);
+    background: var(--topbar-bg);
     backdrop-filter: blur(14px);
     border-top: 1px solid var(--stroke);
   }
@@ -128,6 +190,33 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 420px) {
   .form-grid { grid-template-columns: 1fr; }
 }
+/* ---------------------------------------------------------------- *
+ * Tools                                                            *
+ * ---------------------------------------------------------------- */
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 14px;
+}
+
+/* Calculator: inputs beside results on desktop, stacked on narrow screens. */
+.tool-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.best-times-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 900px) {
+  .tool-split { grid-template-columns: 1fr; }
+}
+
 .pos { color: var(--mint); }
 .neg { color: var(--red); }
 
@@ -152,15 +241,15 @@ a { color: inherit; text-decoration: none; }
   transition: opacity 0.35s ease;
   background: radial-gradient(
     460px circle at var(--mx, 50%) var(--my, 50%),
-    rgba(47, 212, 138, 0.14),
+    var(--glow),
     transparent 45%
   );
 }
 
 .card:hover {
-  border-color: rgba(47, 212, 138, 0.34);
-  box-shadow: var(--shadow), 0 0 0 1px rgba(47, 212, 138, 0.12),
-    0 14px 46px -14px rgba(47, 212, 138, 0.28);
+  border-color: var(--glow-border);
+  box-shadow: var(--shadow), 0 0 0 1px var(--glow),
+    0 14px 46px -14px var(--glow);
 }
 
 .card:hover::before { opacity: 1; }
@@ -185,7 +274,7 @@ a { color: inherit; text-decoration: none; }
   100% { background-position: 400px 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, #141b1a 25%, #1c2523 37%, #141b1a 63%);
+  background: linear-gradient(90deg, var(--skeleton-a) 25%, var(--skeleton-b) 37%, var(--skeleton-a) 63%);
   background-size: 800px 100%;
   animation: shimmer 1.4s infinite linear;
   border-radius: 8px;
