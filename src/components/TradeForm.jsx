@@ -9,7 +9,7 @@ const SESSIONS = ['London', 'New York', 'Asia', 'Overlap']
 const CUSTOM = '__custom__'
 
 const field = {
-  background: '#0e1413', border: '1px solid var(--stroke)', color: 'var(--text)',
+  background: 'var(--input-bg)', border: '1px solid var(--stroke)', color: 'var(--text)',
   borderRadius: 10, padding: '11px 13px', fontSize: 14, width: '100%', outline: 'none',
 }
 const labelStyle = { fontSize: 11.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6, display: 'block' }
@@ -303,7 +303,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId, initial = n
               <label style={labelStyle}>Trade Screenshot</label>
               {preview ? (
                 <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--stroke)' }}>
-                  <img src={preview} alt="trade" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', background: '#0b100f', display: 'block' }} />
+                  <img src={preview} alt="trade" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', background: 'var(--input-bg)', display: 'block' }} />
                   <button type="button" onClick={removeFile}
                     style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(4,7,6,0.75)', color: '#fff', borderRadius: 8, padding: '5px 9px', fontSize: 12 }}>
                     Remove
@@ -313,7 +313,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId, initial = n
                 <label style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
                   border: '1px dashed var(--stroke)', borderRadius: 12, padding: '22px', cursor: 'pointer',
-                  color: 'var(--text-3)', fontSize: 13, background: '#0e1413',
+                  color: 'var(--text-3)', fontSize: 13, background: 'var(--input-bg)',
                 }}>
                   <span style={{ fontSize: 22 }}>🖼️</span>
                   <span>Click to upload a chart screenshot (PNG/JPG, ≤ 6 MB)</span>
@@ -366,7 +366,7 @@ function PnlBreakdown({ form }) {
   return (
     <div style={{
       marginTop: 12, padding: '11px 14px', borderRadius: 11,
-      border: '1px solid var(--stroke)', background: '#0e1413',
+      border: '1px solid var(--stroke)', background: 'var(--input-bg)',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8,
       fontSize: 13,
     }}>

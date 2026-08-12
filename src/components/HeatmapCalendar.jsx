@@ -5,7 +5,7 @@ import { calendarData, fmtMoney } from '../lib/stats'
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
 function color(pnl, max) {
-  if (pnl === 0) return '#141b1a'
+  if (pnl === 0) return 'var(--track)'
   const t = Math.min(1, Math.abs(pnl) / (max || 1))
   if (pnl > 0) {
     // mint scale
@@ -79,7 +79,7 @@ export default function HeatmapCalendar({ trades, days = 133 }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: 'var(--text-3)' }}>
           Loss
           <span style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(255,107,107,0.85)' }} />
-          <span style={{ width: 12, height: 12, borderRadius: 3, background: '#141b1a' }} />
+          <span style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--track)' }} />
           <span style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(47,212,138,0.85)' }} />
           Profit
         </div>

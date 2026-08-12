@@ -11,7 +11,7 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 0 | Foundation: routing, shell/nav, top bar, schema superset, filterable stats core | ⏸ Not started |
+| 0 | Foundation: routing, shell/nav, top bar, schema superset, filterable stats core | ✅ Done |
 | 1 | Analysis module to full spec (filters, 9 widgets, ~30-metric stats block) | ⏸ Not started |
 | 2 | Tools: Position Size Calculator, Forex Market Hours, tool shell | ⏸ Not started |
 | 3 | Journal split-pane + Trades page to spec | ⏸ Not started |
@@ -44,6 +44,89 @@ These block or shape later phases. None block Phases 0–4.
 ---
 
 ## Entries
+
+### 2026-08-12 — Phase 0 complete: foundation
+
+Everything below is code, verified in a browser and by a test run.
+
+**Routing (`?view=<key>`)**
+- `src/lib/views.js` — one list defining all 10 sections, which are built, and
+  which phase owns the rest. The sidebar, mobile nav, command palette and
+  router all read from it.
+- `src/lib/router.js` — query-param router replacing the old `useState` page
+  switch. Every section is now linkable and bookmarkable, and browser
+  back/forward work. Unknown `?view=` values fall back to Dashboard.
+
+**Shell and navigation**
+- Sidebar lists all 10 spec sections; the 7 unbuilt ones carry a "soon" badge
+  and route to `src/pages/ComingSoon.jsx`, which names the phase that delivers
+  them rather than dead-ending.
+- Mobile keeps a 4-slot tab bar (the built pages + quick-add); "More" opens the
+  palette, which lists everything.
+
+**Global top bar** (`src/components/TopBar.jsx`)
+- Section title, ⌘K/Ctrl-K search, theme toggle, live clock with timezone,
+  notifications bell, quick-add, and a profile menu (copy account ID, sign out).
+- The bell deliberately shows an empty state — there is no notification source
+  until trade alerts (phase 4) and broker sync (phase 5) exist.
+
+**Command palette** (`src/components/CommandPalette.jsx`)
+- ⌘K/Ctrl-K, fuzzy filter over sections and actions, arrow-key navigation,
+  Enter to run, Escape to close.
+
+**Light/dark theming**
+- `src/lib/theme.jsx` — dark by default, persisted to localStorage, applied as
+  `data-theme` on `<html>`. Streamer Mode state is plumbed here too, ready for
+  the phase 4 Settings UI to write to.
+- Full light palette added to `global.css`. This surfaced ~20 hardcoded dark
+  colours across charts, inputs, the win-rate donut and the R:R hexagons that
+  were invisible or unreadable in light mode; all are now tokens. Recharts
+  writes to SVG presentation attributes where `var()` is not legal, so
+  `charts.jsx` resolves its palette in JS from the active theme.
+
+**Filterable analytics core** (`src/lib/analytics.js`)
+- `filterTrades({ period, tradeType })` over the spec's 6 periods × 3 trade
+  types, plus `computeAnalytics` returning the full metric set phase 1 needs
+  (streaks, drawdown, session/day aggregates, hold times, profit-factor bands).
+- `stats.js` is untouched, so the existing pages keep working; phase 1 migrates
+  them onto this core.
+
+**Schema superset** (`supabase/phase0.sql`, safe to re-run)
+- Added `status` (open/closed), `opened_at` / `closed_at`, `broker_account_id`,
+  and indexes for the period filters. Existing rows are backfilled from
+  `traded_at`.
+- `is_deletable` is a **generated** column derived from `source`, so a synced
+  trade can never be marked deletable by accident.
+- `swap` made non-null with a 0 default.
+- Decision: `fees` stays the commission column rather than adding a second
+  `commission` field. Every existing UI and the MT5 bridge already write to it,
+  and two columns for one concept would drift apart. Documented via a SQL
+  `comment on column`.
+
+**Verification**
+- `npm run build` passes.
+- `npm test` (`test/analytics.test.mjs`) — 38 assertions reproducing the exact
+  figures the spec verified against the live app: total P&L -$170.69, win rate
+  10%, profit factor 0.23, expectancy -$17.07, avg winner $49.85, avg loser
+  -$24.50, R:R 1:2.03, win streak 1, loss streak 8, 3 trading days, avg daily
+  P&L -$56.90, avg losing day -$85.97, and the rest. All pass.
+- Browser smoke test across 10 behaviours: default route, 10-item sidebar,
+  navigation updating the URL, back button, deep-linking `?view=analysis`,
+  palette open/filter/Enter, theme toggle, theme persisting across reload,
+  invalid-view fallback, and the mobile layout. All pass, no console errors.
+- Two bugs found and fixed during verification: the top-bar clock rendered its
+  timezone as a superscript (the shared `.hide-mobile` class forces
+  `inline-flex`, which overrode the intended column layout), and the light
+  theme's chart/widget colours described above.
+
+**Deliberately not done in this phase:** no new widgets, no page redesigns. The
+existing Dashboard, Journal and Analysis pages render exactly as before — this
+phase only built the foundation they grow on.
+
+**To apply:** run `supabase/phase0.sql` in the Supabase SQL editor. No frontend
+change depends on it yet, so the app works before and after.
+
+---
 
 ### 2026-08-12 — Spec reviewed, plan drafted
 - Read the full 24-page `TradeFXBook_Product_Specification_v2.pdf`: full-app overview

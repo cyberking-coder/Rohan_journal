@@ -37,9 +37,9 @@ export default function Journal({ trades, onAdd, onDelete, onEdit }) {
         right={
           <div style={{ display: 'flex', gap: 10 }}>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…"
-              style={{ background: '#0e1413', border: '1px solid var(--stroke)', color: 'var(--text)', borderRadius: 10, padding: '8px 12px', fontSize: 13, outline: 'none', width: 170 }} />
+              style={{ background: 'var(--input-bg)', border: '1px solid var(--stroke)', color: 'var(--text)', borderRadius: 10, padding: '8px 12px', fontSize: 13, outline: 'none', width: 170 }} />
             <select value={side} onChange={(e) => setSide(e.target.value)}
-              style={{ background: '#0e1413', border: '1px solid var(--stroke)', color: 'var(--text)', borderRadius: 10, padding: '8px 12px', fontSize: 13 }}>
+              style={{ background: 'var(--input-bg)', border: '1px solid var(--stroke)', color: 'var(--text)', borderRadius: 10, padding: '8px 12px', fontSize: 13 }}>
               <option>All</option><option>Long</option><option>Short</option>
             </select>
           </div>

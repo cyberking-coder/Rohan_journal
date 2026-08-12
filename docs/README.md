@@ -46,13 +46,14 @@ Everything else can proceed without blocking on those answers.
 Phases are ordered so each one ships something usable on its own, and so the
 cheap high-value work lands before the expensive infrastructure work.
 
-### Phase 0 — Foundation & housekeeping
+### Phase 0 — Foundation & housekeeping ✅ **Done**
 *Goal: make the repo ready to grow from 3 pages to 10.*
-- Introduce real routing (`?view=<section>` query-param routing, matching the spec's URL scheme).
-- Extract a `Shell` sidebar with all 10 nav entries (unbuilt ones showing a "Coming soon" state).
-- Add the global top bar: search (⌘K), theme toggle, quick-add (+), live clock, notifications bell, profile menu.
-- Split `src/lib/stats.js` into a filterable analytics core that accepts `{ period, tradeType }`.
-- Extend the `trades` schema with the spec's superset fields: `commission`, `swap`, `status`, `source`, `is_deletable`, `broker_account_id`.
+- ✅ Real routing (`?view=<section>` query params, matching the spec's URL scheme) — `src/lib/router.js`, `src/lib/views.js`.
+- ✅ `Shell` sidebar with all 10 nav entries; unbuilt ones route to a "coming soon" screen naming their phase.
+- ✅ Global top bar: search (⌘K), theme toggle, quick-add (+), live clock, notifications bell, profile menu.
+- ✅ Light/dark theming with a full light palette; all previously hardcoded colours tokenised.
+- ✅ Filterable analytics core accepting `{ period, tradeType }` — `src/lib/analytics.js`, covered by `npm test`.
+- ✅ `trades` schema superset — `supabase/phase0.sql`. Note: `fees` remains the commission column rather than adding a duplicate `commission` field, since every existing writer already uses it.
 
 ### Phase 1 — Analysis module to full spec
 *Goal: the single most detailed part of the PDF (§0–§12 of the Analysis dev spec).*
