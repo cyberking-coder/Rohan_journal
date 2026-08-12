@@ -176,6 +176,43 @@ export function dailyTotals(trades) {
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date))
 }
 
+// Per-calendar-month totals, chronological. Feeds the Dashboard's monthly
+// strip and the "best / worst / average month" cards.
+export function monthlyTotals(trades) {
+  const map = new Map()
+  for (const t of trades) {
+    const at = closeTime(t)
+    if (at === null) continue
+    const d = new Date(at)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const cur = map.get(key) || {
+      key,
+      label: d.toLocaleDateString(undefined, { month: 'short' }),
+      year: d.getFullYear(),
+      pnl: 0,
+      count: 0,
+    }
+    cur.pnl += net(t)
+    cur.count += 1
+    map.set(key, cur)
+  }
+  return [...map.values()].sort((a, b) => a.key.localeCompare(b.key))
+}
+
+// Realised P&L split by whether the position is still open. "Unrealized" only
+// means anything once broker sync reports live positions (phase 5); until then
+// it is legitimately zero rather than fabricated.
+export function realisedSplit(trades) {
+  const open = trades.filter(isOpen)
+  const closed = trades.filter((t) => !isOpen(t))
+  return {
+    realised: closed.reduce((s, t) => s + net(t), 0),
+    unrealised: open.reduce((s, t) => s + net(t), 0),
+    openCount: open.length,
+    closedCount: closed.length,
+  }
+}
+
 function avg(nums) {
   return nums.length ? nums.reduce((s, n) => s + n, 0) / nums.length : 0
 }

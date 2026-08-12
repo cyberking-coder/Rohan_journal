@@ -1,13 +1,18 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { net, fmtMoney } from '../lib/stats'
+import { net } from '../lib/stats'
+import Money from './Money'
 import { closeTime, openTime } from '../lib/analytics'
 import { isSynced, sourceLabel, tradeSummaryText } from '../lib/accounts'
+import { usePrefs } from '../lib/theme'
+import { formatDateTime } from '../lib/format'
 
 // The Trades page history table, laid out per the spec: stacked open/close
 // timestamps, direction badge, prices, size, P&L, source, and row actions.
 export default function TradeHistoryTable({ trades, onDelete, onEdit }) {
   const [copiedId, setCopiedId] = useState(null)
+  // Timestamps render in the user's chosen timezone (Settings -> Timezone).
+  const { timezone } = usePrefs()
 
   if (!trades.length) {
     return (
@@ -52,9 +57,9 @@ export default function TradeHistoryTable({ trades, onDelete, onEdit }) {
                 style={{ borderTop: '1px solid var(--stroke-soft)' }}
               >
                 <td style={cell}>
-                  <div style={{ fontSize: 12.5 }}>{fmtStamp(opened)}</div>
+                  <div style={{ fontSize: 12.5 }}>{fmtStamp(opened, timezone)}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                    {t.status === 'open' ? 'still open' : fmtStamp(closed)}
+                    {t.status === 'open' ? 'still open' : fmtStamp(closed, timezone)}
                   </div>
                 </td>
 
@@ -75,9 +80,8 @@ export default function TradeHistoryTable({ trades, onDelete, onEdit }) {
                 <td style={{ ...cell, fontFamily: 'var(--mono)', fontSize: 13 }}>{t.exit ?? '—'}</td>
                 <td style={{ ...cell, fontFamily: 'var(--mono)', fontSize: 13 }}>{t.qty ?? '—'}</td>
 
-                <td style={{ ...cell, fontFamily: 'var(--mono)', fontSize: 13.5, fontWeight: 600,
-                  color: pnl >= 0 ? 'var(--mint)' : 'var(--red)' }}>
-                  {fmtMoney(pnl, 2)}
+                <td style={{ ...cell, fontFamily: 'var(--mono)', fontSize: 13.5, fontWeight: 600 }}>
+                  <Money value={pnl} colored />
                 </td>
 
                 <td style={cell}>
@@ -125,10 +129,9 @@ function IconAction({ children, title, onClick, disabled }) {
   )
 }
 
-function fmtStamp(ms) {
+function fmtStamp(ms, timezone) {
   if (ms === null) return '—'
-  const d = new Date(ms)
-  return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+  return formatDateTime(ms, { timezone })
 }
 
 const cell = { padding: '12px 14px', verticalAlign: 'middle', whiteSpace: 'nowrap' }

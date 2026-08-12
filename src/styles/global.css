@@ -301,6 +301,18 @@ a { color: inherit; text-decoration: none; }
   .journal-meta { grid-template-columns: 1fr; gap: 16px; }
 }
 
+/* Streamer Mode: hide money on screen without hiding it from the trader.
+   Hovering (or focusing) a value reveals it for the person at the desk. */
+[data-streamer='on'] .sensitive {
+  filter: blur(7px);
+  transition: filter 0.15s ease;
+  cursor: help;
+}
+[data-streamer='on'] .sensitive:hover,
+[data-streamer='on'] .sensitive:focus-within {
+  filter: none;
+}
+
 .pos { color: var(--mint); }
 .neg { color: var(--red); }
 

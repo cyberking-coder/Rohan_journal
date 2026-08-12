@@ -8,7 +8,10 @@ import {
   journalRating, tabCounts,
 } from '../lib/journal'
 import { closeTime } from '../lib/analytics'
-import { net, fmtMoney } from '../lib/stats'
+import { net } from '../lib/stats'
+import Money from '../components/Money'
+import { usePrefs } from '../lib/theme'
+import { formatDateTime } from '../lib/format'
 
 export default function Journal({ trades, onAdd, onUpdate, onEdit }) {
   const [tab, setTab] = useState('all')
@@ -104,6 +107,7 @@ export default function Journal({ trades, onAdd, onUpdate, onEdit }) {
 }
 
 function TradeCard({ trade, active, onSelect }) {
+  const { timezone } = usePrefs()
   const pnl = net(trade)
   const at = closeTime(trade)
   const fresh = !isJournaled(trade)
@@ -129,15 +133,14 @@ function TradeCard({ trade, active, onSelect }) {
             borderRadius: 4, color: 'var(--amber)', border: '1px solid rgba(255,207,107,0.35)',
           }}>NEW</span>
         )}
-        <span className="mono" style={{
-          marginLeft: 'auto', fontSize: 13, fontWeight: 600,
-          color: pnl >= 0 ? 'var(--mint)' : 'var(--red)',
-        }}>{fmtMoney(pnl, 2)}</span>
+        <span className="mono" style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 600 }}>
+          <Money value={pnl} colored />
+        </span>
       </div>
       <div style={{ display: 'flex', gap: 8, fontSize: 11, color: 'var(--text-3)' }}>
         <span>{trade.entry != null ? `@ ${trade.entry}` : '—'}</span>
         <span style={{ marginLeft: 'auto' }}>
-          {at ? new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}
+          {at ? formatDateTime(at, { timezone, hour: undefined, minute: undefined }) : '—'}
         </span>
       </div>
     </button>
@@ -223,8 +226,8 @@ function JournalDetail({ trade, onUpdate, onEdit }) {
         </div>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="mono" style={{ fontSize: 17, fontWeight: 700, color: pnl >= 0 ? 'var(--mint)' : 'var(--red)' }}>
-            {fmtMoney(pnl, 2)}
+          <span className="mono" style={{ fontSize: 17, fontWeight: 700 }}>
+            <Money value={pnl} colored />
           </span>
           {onEdit && (
             <button onClick={() => onEdit(trade)} title="Edit trade details"

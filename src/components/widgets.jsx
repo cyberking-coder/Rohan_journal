@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { fmtMoney } from '../lib/stats'
+import Money from './Money'
 
 export function StatCard({ label, value, sub, accent, delay = 0, children }) {
   return (
@@ -109,6 +109,6 @@ export function PnlPill({ value }) {
       color: positive ? 'var(--mint)' : 'var(--red)',
       background: positive ? 'rgba(47,212,138,0.1)' : 'rgba(255,107,107,0.1)',
       padding: '3px 9px', borderRadius: 8,
-    }}>{fmtMoney(value)}</span>
+    }}><Money value={value} /></span>
   )
 }
