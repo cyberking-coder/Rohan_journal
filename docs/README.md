@@ -66,12 +66,12 @@ cheap high-value work lands before the expensive infrastructure work.
 - "Your Stats" block: monthly best/worst/average + the ~30-metric two-column grid.
 - Fix the spec's noted bug: implement **Max Drawdown %** properly (`max_drawdown / peak_equity_before_drawdown × 100`), don't clone the live app's `0%`.
 
-### Phase 2 — Tools module
+### Phase 2 — Tools module ✅ **Done**
 *Goal: fully specified, stateless, fast wins.*
-- `<ToolPageShell>` wrapper + config-driven tool grid with Popular/Live/New/Coming-Soon badges.
-- **Position Size Calculator** — `position_size = (balance × risk%) / (sl_pips × pip_value_per_lot)`; risk slider 0.5–5% with presets; standard/mini/micro lot outputs; ~33-instrument dropdown (deduped — the live app lists BTCUSD/ETHUSD twice).
-- **Forex Market Hours** — 12h/24h toggle, live "now" line, 4 city sessions (Sydney/Tokyo/London/NY), volume heuristic lookup, "Best Times to Trade" reference cards rendered in the user's timezone.
-- Extend `src/lib/instruments.js` into a full `Instrument { symbol, category, pip_size, pip_value_per_lot, icon_url }` config.
+- ✅ `<ToolPageShell>` wrapper + config-driven tool grid with Popular/Live/Coming-Soon badges — `src/lib/tools.js`, `src/pages/Tools.jsx`. Tools open at `?view=tools&tool=<id>`, so each is linkable and the back button returns to the grid.
+- ✅ **Position Size Calculator** — `position_size = (balance × risk%) / (sl_pips × pip_value_per_lot)`; risk slider 0.5–5% with presets and Conservative/Moderate/Aggressive zones; standard/mini/micro lot outputs; 32-instrument dropdown (deduped — the live app lists BTCUSD/ETHUSD twice); custom pip-value override.
+- ✅ **Forex Market Hours** — 12h/24h toggle, live "now" line, 4 city sessions (Sydney/Tokyo/London/NY), weekend handling, volume heuristic, "Best Times to Trade" cards rendered in the viewer's timezone.
+- ✅ Instrument pip config — `src/lib/pips.js`, kept separate from `instruments.js` (contract sizes for P&L) since it answers a different question. Rate-dependent pairs are marked approximate rather than presenting a stale number as fact.
 
 ### Phase 3 — Journal & Trades to spec
 - Journal split-pane: left list (All / Journaled / Pending tabs with counts, search, date filter, sort, NEW badges) + right detail pane.

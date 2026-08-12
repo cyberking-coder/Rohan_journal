@@ -6,6 +6,7 @@ import CommandPalette from './components/CommandPalette'
 import Dashboard from './pages/Dashboard'
 import Journal from './pages/Journal'
 import Analysis from './pages/Analysis'
+import Tools from './pages/Tools'
 import ComingSoon from './pages/ComingSoon'
 import Login from './pages/Login'
 import { useTrades } from './lib/useTrades'
@@ -77,6 +78,7 @@ function Journalized({ userId }) {
             {view === 'dashboard' && <Dashboard trades={trades} onAdd={openForm} />}
             {view === 'journal' && <Journal trades={trades} onAdd={openForm} onDelete={deleteTrade} onEdit={openEdit} />}
             {view === 'analysis' && <Analysis trades={trades} />}
+            {view === 'tools' && <Tools />}
             {!current?.ready && <ComingSoon view={current} />}
           </motion.div>
         </AnimatePresence>

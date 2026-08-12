@@ -72,8 +72,7 @@ export const VIEWS = [
     key: 'tools',
     label: 'Tools',
     icon: '⚙',
-    ready: false,
-    phase: 2,
+    ready: true,
     description: 'Position size calculator, market hours and more.',
   },
   {

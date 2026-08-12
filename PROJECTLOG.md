@@ -13,7 +13,7 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 | --- | --- | --- |
 | 0 | Foundation: routing, shell/nav, top bar, schema superset, filterable stats core | ✅ Done |
 | 1 | Analysis module to full spec (filters, 9 widgets, ~30-metric stats block) | ⏸ Not started |
-| 2 | Tools: Position Size Calculator, Forex Market Hours, tool shell | ⏸ Not started |
+| 2 | Tools: Position Size Calculator, Forex Market Hours, tool shell | ✅ Done |
 | 3 | Journal split-pane + Trades page to spec | ⏸ Not started |
 | 4 | Dashboard widgets + Settings tabs & preferences | ⏸ Not started |
 | 5 | Broker accounts & auto-sync | ⛔ Blocked — needs a broker-bridge vendor decision |
@@ -44,6 +44,73 @@ These block or shape later phases. None block Phases 0–4.
 ---
 
 ## Entries
+
+### 2026-08-12 — Phase 2 complete: Tools module
+
+Built out of order — Phase 2 is stateless and depends on nothing in Phase 1.
+
+**Tool framework**
+- `src/lib/tools.js` — config-driven registry; adding a tool is a data change.
+- `src/pages/Tools.jsx` — grid with Popular/Live/Coming-Soon badges and
+  Available/Coming-Soon counters. Unbuilt tools name the phase that delivers them.
+- `src/components/ToolPageShell.jsx` — shared back-link/title/actions chrome.
+- Tools open at `?view=tools&tool=<id>` via a new `useQueryParam` hook, so each
+  tool is linkable and the back button steps out to the grid. The live app
+  doesn't change its URL here; this is deliberately better.
+
+**Position Size Calculator**
+- `position_size = (balance × risk%) / (sl_pips × pip_value_per_lot)`, with
+  standard/mini/micro lot outputs, risk amount and loss-at-stop.
+- Risk slider 0.5–5% with 5 presets and Conservative/Moderate/Aggressive zones;
+  live risk-amount readout as the slider moves.
+- 32-instrument dropdown grouped by category. The live app lists BTCUSD and
+  ETHUSD twice — a test asserts we have no duplicates.
+- Custom pip-value override for traders using their broker's exact figure.
+
+**Forex Market Hours**
+- 12h/24h toggle, live clock, "N sessions open" banner with flags.
+- Shared 24h UTC timeline with a live "now" line and per-city session bars.
+  Sydney wraps past midnight and is drawn as two segments — a single bar would
+  render as negative width.
+- Weekend handling: forex is shut from Fri 22:00 UTC to Sun 22:00 UTC, so a
+  session whose clock says "open" on a Saturday is correctly reported closed.
+- Volume heuristic (London+NY overlap = High), and "Best Times to Trade" cards
+  stored in UTC and converted to the viewer's local time.
+
+**Decisions worth recording**
+- *Two session models kept separate.* This tool uses four cities with real,
+  overlapping hours; the Analysis module (phase 1) uses three non-overlapping
+  sessions covering all 24h, because every trade must fall in exactly one
+  bucket. The spec flags the difference; merging them would break one or the other.
+- *Gold pip size shown as 0.10, not 0.01.* The live app displays pip size 0.01
+  **and** pip value $10/lot, which are mutually inconsistent on a 100oz contract
+  (0.01 there is $1/lot). The $10 pip value is what drives the maths and is
+  verified, so that is preserved exactly — the displayed pip size is corrected
+  to 0.10 so the two figures agree. Worth confirming against your broker.
+- *Rate-dependent pip values are marked approximate.* Pip value in USD is only
+  constant for USD-quoted pairs. JPY/CHF/CAD/AUD crosses, indices and crypto
+  carry an `approx` note stating the rate assumed, and the UI shows a warning
+  pointing at the custom-override field. Exact values need a live rate feed,
+  which arrives in phase 6.
+- *The two unnamed "coming soon" slots in the live app were left out.* A card
+  with no title tells the user nothing.
+
+**Verification**
+- `npm test` now runs 82 assertions across two files. The new
+  `test/tools.test.mjs` covers the calculator (including the spec's verified
+  example: $10,000 / 1% / 20 pips / XAUUSD → **0.50 lots**, 5 mini, 50 micro,
+  $100 risk), the invariant that loss-at-stop always equals intended risk,
+  null-not-NaN handling for bad input, no duplicate instruments, session
+  wrap-around, weekend closure and the volume heuristic.
+- `npm run build` passes.
+- Browser pass: grid renders 5 cards, tool opens and updates the URL, the
+  calculator produces 0.50 lots for the spec's inputs, custom pip toggle works,
+  back button returns to the grid, Market Hours shows the right open/closed
+  state and live now-line, 12h/24h toggles, deep links work, light theme is
+  clean, and mobile has no horizontal scroll on any of the three screens.
+  No console errors.
+
+---
 
 ### 2026-08-12 — Phase 0 complete: foundation
 

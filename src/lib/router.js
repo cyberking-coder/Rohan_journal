@@ -17,6 +17,9 @@ function urlForView(key) {
   const params = new URLSearchParams(window.location.search)
   if (key === DEFAULT_VIEW) params.delete('view')
   else params.set('view', key)
+  // Sub-view params belong to the view that owns them, so leaving a section
+  // must not carry its state into the next one.
+  params.delete('tool')
   const qs = params.toString()
   return `${window.location.pathname}${qs ? `?${qs}` : ''}`
 }
@@ -42,4 +45,34 @@ export function useView() {
   }, [])
 
   return [view, navigate]
+}
+
+// A secondary query param owned by the current view — used by Tools to open a
+// specific tool at `?view=tools&tool=<id>`. Shares the same history stack, so
+// the back button steps out of a tool and into the grid.
+export function useQueryParam(name) {
+  const read = useCallback(() => {
+    if (typeof window === 'undefined') return null
+    return new URLSearchParams(window.location.search).get(name)
+  }, [name])
+
+  const [value, setValue] = useState(read)
+
+  useEffect(() => {
+    const onPop = () => setValue(read())
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [read])
+
+  const set = useCallback((next) => {
+    const params = new URLSearchParams(window.location.search)
+    if (next == null) params.delete(name)
+    else params.set(name, next)
+    const qs = params.toString()
+    window.history.pushState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
+    window.scrollTo({ top: 0 })
+    setValue(next ?? null)
+  }, [name])
+
+  return [value, set]
 }
