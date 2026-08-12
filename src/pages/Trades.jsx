@@ -2,20 +2,22 @@ import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PageHeader } from '../components/common'
 import TradeHistoryTable from '../components/TradeHistoryTable'
+import { accountSummary } from '../lib/accounts'
 import {
-  ALL_ACCOUNTS, accountSummary, buildAccounts, filterByAccount, maskIdentifier,
-} from '../lib/accounts'
+  ALL_ACCOUNTS, combineAccounts, displayName, filterByAccount, syncStatus,
+} from '../lib/brokerAccounts'
 import { fmtPct } from '../lib/stats'
 import Money from '../components/Money'
 
-export default function Trades({ trades, onAdd, onDelete, onEdit, onClearAll }) {
+export default function Trades({ trades, onAdd, onDelete, onEdit, onClearAll, brokerAccounts }) {
   const [accountId, setAccountId] = useState(ALL_ACCOUNTS)
   const [revealed, setRevealed] = useState(false)
   const [side, setSide] = useState('All')
   const [query, setQuery] = useState('')
   const [confirmClear, setConfirmClear] = useState(false)
 
-  const accounts = useMemo(() => buildAccounts(trades), [trades])
+  const registered = brokerAccounts?.accounts ?? []
+  const accounts = useMemo(() => combineAccounts(registered, trades), [registered, trades])
   const scoped = useMemo(() => filterByAccount(trades, accountId), [trades, accountId])
 
   const rows = useMemo(() => scoped.filter((t) => {
@@ -52,8 +54,8 @@ export default function Trades({ trades, onAdd, onDelete, onEdit, onClearAll }) 
               <AccountPill
                 key={a.id} active={accountId === a.id} count={a.trades}
                 onClick={() => setAccountId(a.id)}
-                label={revealed ? a.label : maskIdentifier(a.label)}
-                synced={a.synced}
+                label={displayName(a, revealed)}
+                status={syncStatus(a)}
               />
             ))}
           </div>
@@ -69,8 +71,10 @@ export default function Trades({ trades, onAdd, onDelete, onEdit, onClearAll }) 
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {/* Sync and Disconnect need the broker bridge, which is phase 5.
                 Shown disabled rather than as buttons that do nothing. */}
-            <DisabledAction label="Sync" title="Broker sync arrives in phase 5" />
-            <DisabledAction label="Disconnect" title="Broker connections arrive in phase 5" />
+            {/* Sync runs from the bridge on the user's own machine, so the app
+                can only refetch what it has already pushed. */}
+            <button onClick={() => brokerAccounts?.refetch?.()} style={ghostButton}>Refresh</button>
+            <a href="?view=settings&tab=accounts" style={{ ...ghostButton, display: 'inline-block' }}>Manage accounts</a>
             <button onClick={() => setConfirmClear(true)} disabled={!trades.length}
               style={{
                 ...ghostButton,
@@ -131,7 +135,10 @@ export default function Trades({ trades, onAdd, onDelete, onEdit, onClearAll }) 
   )
 }
 
-function AccountPill({ label, count, active, synced, onClick }) {
+function AccountPill({ label, count, active, status, onClick }) {
+  const dot = status && status.tone === 'good' ? 'var(--mint)'
+    : status && status.tone === 'bad' ? 'var(--red)'
+    : status && status.tone === 'neutral' ? 'var(--amber)' : null
   return (
     <button onClick={onClick}
       style={{
@@ -140,21 +147,12 @@ function AccountPill({ label, count, active, synced, onClick }) {
         background: active ? 'var(--card-hover)' : 'transparent',
         color: active ? 'var(--text)' : 'var(--text-3)',
       }}>
-      {synced && <span style={{ color: 'var(--mint)', fontSize: 8 }}>●</span>}
+      {dot && <span title={status.label} style={{ color: dot, fontSize: 8 }}>●</span>}
       {label}
       <span className="mono" style={{
         fontSize: 10, padding: '1px 5px', borderRadius: 5,
         background: 'var(--track)', color: 'var(--text-3)',
       }}>{count}</span>
-    </button>
-  )
-}
-
-function DisabledAction({ label, title }) {
-  return (
-    <button disabled title={title}
-      style={{ ...ghostButton, color: 'var(--text-3)', cursor: 'not-allowed', opacity: 0.6 }}>
-      {label}
     </button>
   )
 }

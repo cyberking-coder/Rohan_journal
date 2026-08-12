@@ -16,7 +16,7 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 | 2 | Tools: Position Size Calculator, Forex Market Hours, tool shell | ✅ Done |
 | 3 | Journal split-pane + Trades page to spec | ✅ Done |
 | 4 | Dashboard widgets + Settings tabs & preferences | ✅ Done |
-| 5 | Broker accounts & auto-sync | ⛔ Blocked — needs a broker-bridge vendor decision |
+| 5 | Broker accounts & auto-sync | 🟡 Done except credential-based cloud sync (vendor-gated) |
 | 6 | Economic Calendar (Market) | ⛔ Blocked — needs a calendar data-feed decision |
 | 7 | AI Report generation + weekly quota | ⏸ Not started |
 | 8 | Backtesting (candle replay) | ⏸ Not started |
@@ -30,8 +30,10 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 
 These block or shape later phases. None block Phases 0–4.
 
-1. **Broker sync vendor** — MetaApi.cloud (paid, cloud-native) vs. hosting the existing
-   `mt5_bridge/sync.py` on a Windows box vs. a custom EA + webhook bridge. Affects Phase 5.
+1. **Broker sync vendor** — still open, but no longer blocking: phase 5 shipped the
+   account model and self-hosted sync without it. What it still gates is sync that
+   works while your machine is off, which needs a server holding the credential
+   (MetaApi.cloud, a hosted bridge, or a custom EA + webhook).
 2. **Economic calendar feed** — which provider, and whether its licence permits
    redisplay. Affects Phase 6 and the Dashboard news ticker.
 3. **Auth provider** — the spec documents Clerk; this repo uses Supabase Auth with RLS.
@@ -44,6 +46,71 @@ These block or shape later phases. None block Phases 0–4.
 ---
 
 ## Entries
+
+### 2026-08-12 — Phase 5: broker accounts (vendor-gated part excluded)
+
+This was the phase marked blocked. Most of it turned out not to depend on the
+vendor decision at all, so that part is built; the part that genuinely does is
+called out below rather than faked.
+
+**Built**
+- `broker_accounts` table with RLS, plus the real foreign key from `trades`
+  that phase 0 could only stub. It is ON DELETE SET NULL, not CASCADE: removing
+  an account must never silently delete the trade history behind it.
+- Account management in Settings → MT5/MT4: add, edit, favourite, disconnect
+  (keeps history, stops treating it as live), and remove. Per-account P&L,
+  trades, win rate, open positions and last sync.
+- Sync status derived from real timestamps — connected / idle / stale / never
+  synced / error / disconnected — so a bridge that quietly died is visible
+  rather than letting the journal drift without the user noticing.
+- `mt5_bridge/sync.py` now registers its own account on startup, stamps
+  `broker_account_id` on every imported trade, and writes back success or the
+  error text.
+- Trades page switcher reads real accounts, with sync dots.
+- Trades logged before this phase still appear, grouped by `source` and marked
+  "not registered", so nothing vanishes from the switcher during the transition.
+
+**Not built, deliberately: credential storage.**
+The spec describes storing read-only investor passwords. This app is a browser
+SPA talking straight to Supabase, so any column the client can read is one that
+XSS, a malicious extension, or whoever picks up the laptop can read too.
+Storing live broker credentials there turns a journal into a way to lose an
+account. Doing it safely needs a server the browser cannot read from — an Edge
+Function or hosted bridge holding the secret, written once and never returned —
+which is the vendor decision still open. The schema has no credential column
+and the SQL says why, so nobody adds one later without meeting the argument.
+Meanwhile `mt5_bridge/` attaches to a terminal the user already logged into and
+transmits no password at all.
+
+**Other decisions**
+- *Two kinds of account coexist.* Registered rows and source-derived groups are
+  both shown. A test asserts attributed trades are never double-counted into a
+  derived bucket.
+- *A reported sync error outranks a fresh timestamp*, or a broken bridge would
+  display as healthy.
+- *The account-number field rejects anything that isn't a plain identifier.*
+  It's a cheap guard against someone pasting a password into it.
+- *The bridge no longer writes `rating: 3`.* Since phase 3 that fed the rating
+  fallback, so every auto-imported trade showed 6/10 without the user ever
+  rating it. Imported trades now arrive genuinely unrated.
+
+**Verification**
+- `npm test` now runs 221 assertions across five files. The new
+  `test/accounts.test.mjs` covers every sync-status transition and its
+  boundaries, error precedence, malformed timestamps, combining registered with
+  derived accounts, no double counting, filtering by both id kinds, the privacy
+  mask, and validation.
+- `npm run build` passes; `mt5_bridge/sync.py` parses.
+- Browser pass: derived groups shown, account created and persisted, number
+  masked and revealed on request, never-synced and disconnected states,
+  favourite and disconnect actions, validation rejecting a pasted secret, the
+  Trades switcher picking up the registered account, and mobile layout.
+  No console errors.
+
+**To apply:** run `supabase/phase5.sql`. Without it the app falls back to
+source-derived accounts and says so rather than erroring.
+
+---
 
 ### 2026-08-12 — Phase 4 complete: Dashboard and Settings
 

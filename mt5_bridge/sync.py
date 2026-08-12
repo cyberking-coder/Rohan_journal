@@ -129,7 +129,7 @@ def session_for(hour_utc):
     return "Asia"
 
 
-def build_trades(from_dt, to_dt):
+def build_trades(from_dt, to_dt, broker_account_id=None):
     """Aggregate MT5 deals into round-trip trades keyed by position id."""
     deals = mt5.history_deals_get(from_dt, to_dt)
     if deals is None:
@@ -192,6 +192,7 @@ def build_trades(from_dt, to_dt):
             "user_id": JOURNAL_USER_ID,
             "external_id": str(pid),
             "source": "mt5",
+            "broker_account_id": broker_account_id,
             "symbol": first_in.symbol,
             "side": side,
             "strategy": strategy,
@@ -205,26 +206,88 @@ def build_trades(from_dt, to_dt):
             "stop_loss": sl,
             "take_profit": tp,
             "rr": rr,
-            "rating": 3,
+            # Deliberately no rating: an auto-imported trade has not been
+            # reviewed yet, and pre-filling one would make every synced trade
+            # look journaled in the app.
             "notes": "",
             "traded_at": close_dt.isoformat(),
         }, )
     return trades
 
 
-def sync_once(sb):
+def ensure_broker_account(sb):
+    """Register this MT5 account in broker_accounts, and return its id.
+
+    Only ever writes the account NUMBER and server name — never the password.
+    The bridge attaches to a terminal you already logged into, so it has no
+    credential to store even if it wanted one.
+
+    Returns None if phase5.sql hasn't been applied yet; syncing still works,
+    the trades are simply unattributed.
+    """
+    acc = mt5.account_info()
+    if not acc:
+        return None
+
+    number = str(acc.login)
+    try:
+        found = (sb.table("broker_accounts").select("id")
+                 .eq("user_id", JOURNAL_USER_ID)
+                 .eq("platform", "mt5")
+                 .eq("account_number", number)
+                 .limit(1).execute())
+        if found.data:
+            return found.data[0]["id"]
+
+        created = sb.table("broker_accounts").insert({
+            "user_id": JOURNAL_USER_ID,
+            "label": f"{acc.server} {number}",
+            "broker": acc.server,
+            "account_number": number,
+            "platform": "mt5",
+            "currency": acc.currency,
+        }).execute()
+        if created.data:
+            print(f"Registered broker account {number} ({acc.server})")
+            return created.data[0]["id"]
+    except Exception as e:
+        print("Could not register broker account (has phase5.sql been applied?):", e)
+    return None
+
+
+def stamp_sync(sb, account_id, error=None):
+    """Record the outcome so the app can show a live/stale status."""
+    if not account_id:
+        return
+    try:
+        patch = {"last_sync_error": error, "updated_at": datetime.now(timezone.utc).isoformat()}
+        if error is None:
+            patch["last_synced_at"] = datetime.now(timezone.utc).isoformat()
+        sb.table("broker_accounts").update(patch).eq("id", account_id).execute()
+    except Exception as e:
+        print("Could not update sync status:", e)
+
+
+def sync_once(sb, account_id=None):
     from_dt = read_cursor()
     to_dt = datetime.now(timezone.utc)
-    trades = build_trades(from_dt, to_dt)
-    if trades:
-        # Upsert on (user_id, external_id) so re-runs never duplicate.
-        sb.table("trades").upsert(
-            [t for t in trades],
-            on_conflict="user_id,external_id",
-        ).execute()
-        print(f"[{to_dt:%H:%M:%S}] synced {len(trades)} closed trade(s)")
-    else:
-        print(f"[{to_dt:%H:%M:%S}] no new closed trades")
+    try:
+        trades = build_trades(from_dt, to_dt, account_id)
+        if trades:
+            # Upsert on (user_id, external_id) so re-runs never duplicate.
+            sb.table("trades").upsert(
+                [t for t in trades],
+                on_conflict="user_id,external_id",
+            ).execute()
+            print(f"[{to_dt:%H:%M:%S}] synced {len(trades)} closed trade(s)")
+        else:
+            print(f"[{to_dt:%H:%M:%S}] no new closed trades")
+    except Exception as e:
+        # Surface the failure in the app rather than only in this console.
+        stamp_sync(sb, account_id, str(e))
+        raise
+
+    stamp_sync(sb, account_id)
     # step the cursor back a little to catch late-settling deals
     write_cursor(to_dt - timedelta(hours=6))
 
@@ -237,15 +300,16 @@ def main():
     require_config()
     sb = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     init_mt5()
+    account_id = ensure_broker_account(sb)
 
     try:
         if args.once:
-            sync_once(sb)
+            sync_once(sb, account_id)
         else:
             print(f"Polling every {POLL_SECONDS}s. Press Ctrl+C to stop.")
             while True:
                 try:
-                    sync_once(sb)
+                    sync_once(sb, account_id)
                 except Exception as e:
                     print("Sync error:", e)
                 time.sleep(POLL_SECONDS)

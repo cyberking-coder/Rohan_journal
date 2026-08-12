@@ -5,7 +5,7 @@ import { Sensitive } from '../components/Money'
 import { useAuth } from '../lib/AuthContext'
 import { usePrefs } from '../lib/theme'
 import { useQueryParam } from '../lib/router'
-import { buildAccounts, maskIdentifier } from '../lib/accounts'
+import BrokerAccounts from '../components/BrokerAccounts'
 import {
   CURRENCIES, CURRENCY_KEYS, TIMEZONE_GROUPS, formatMoney,
   resolveTimezone, timezoneCity, timezoneOffsetLabel,
@@ -20,7 +20,7 @@ const TABS = [
   { key: 'security', label: 'Security' },
 ]
 
-export default function Settings({ trades = [], onClearAll }) {
+export default function Settings({ trades = [], onClearAll, brokerAccounts }) {
   const [tab, setTab] = useQueryParam('tab')
   const active = TABS.some((t) => t.key === tab) ? tab : 'profile'
 
@@ -44,7 +44,7 @@ export default function Settings({ trades = [], onClearAll }) {
 
       <motion.div key={active} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
         {active === 'profile' && <ProfileTab />}
-        {active === 'accounts' && <AccountsTab trades={trades} />}
+        {active === 'accounts' && <AccountsTab trades={trades} brokerAccounts={brokerAccounts} />}
         {active === 'preferences' && <PreferencesTab trades={trades} onClearAll={onClearAll} />}
         {active === 'billing' && <BillingTab />}
         {active === 'security' && <SecurityTab />}
@@ -130,57 +130,36 @@ function ProfileTab() {
 
 /* ── Accounts tab ───────────────────────────────────────────────────────── */
 
-function AccountsTab({ trades }) {
-  const { currency, streamerMode } = usePrefs()
-  const accounts = buildAccounts(trades)
-  const [revealed, setRevealed] = useState(false)
+function AccountsTab({ trades, brokerAccounts }) {
+  const { streamerMode } = usePrefs()
+  const { accounts = [], error, addAccount, updateAccount, removeAccount } = brokerAccounts ?? {}
 
   return (
     <Section
       title="Connected Trading Accounts"
-      subtitle="Where your trades come from."
-      right={
-        <button onClick={() => setRevealed((r) => !r)} style={ghost}>
-          {revealed ? 'Hide identifiers' : 'Reveal identifiers'}
-        </button>
-      }
+      subtitle="The accounts your trades belong to, and whether each one is still syncing."
     >
-      {accounts.length === 0 ? (
-        <Empty>No trades yet, so there is nothing to attribute to an account.</Empty>
-      ) : accounts.map((a) => (
-        <div key={a.id} style={{
-          padding: 15, borderRadius: 12, marginBottom: 10,
-          background: 'var(--card-2)', border: '1px solid var(--stroke)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>
-              {revealed ? a.label : maskIdentifier(a.label)}
-            </span>
-            <span style={{
-              fontSize: 9.5, fontWeight: 700, letterSpacing: '0.05em', padding: '3px 7px', borderRadius: 5,
-              color: a.synced ? 'var(--mint)' : 'var(--text-3)',
-              border: `1px solid ${a.synced ? 'rgba(47,212,138,0.35)' : 'var(--stroke)'}`,
-            }}>{a.synced ? 'IMPORTED' : 'MANUAL'}</span>
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)' }}>
-              {a.lastAt ? `Last trade ${new Date(a.lastAt).toLocaleDateString()}` : '—'}
-            </span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))', gap: 12, marginTop: 12 }}>
-            <Mini label="Total P&L" value={
-              <Sensitive style={{ color: a.pnl >= 0 ? 'var(--mint)' : 'var(--red)' }}>
-                {formatMoney(a.pnl, { currency })}
-              </Sensitive>} />
-            <Mini label="Trades" value={a.trades} />
-            <Mini label="Win Rate" value={fmtPct(a.winRate, 1)} />
-            <Mini label="Open" value={a.open} />
-          </div>
-        </div>
-      ))}
+      {error && (
+        <div style={{
+          marginBottom: 12, padding: '10px 13px', borderRadius: 10, fontSize: 12.5,
+          background: 'rgba(255,107,107,0.09)', border: '1px solid rgba(255,107,107,0.3)', color: 'var(--red)',
+        }}>Couldn’t load accounts: {error}</div>
+      )}
+
+      <BrokerAccounts
+        accounts={accounts}
+        trades={trades}
+        onAdd={addAccount}
+        onUpdate={updateAccount}
+        onRemove={removeAccount}
+      />
 
       <Note>
-        These are grouped from each trade’s source. Real broker connections — connect, sync,
-        disconnect, and read-only investor credentials — arrive in phase 5. The existing
-        <span className="mono"> mt5_bridge/</span> script can already import from MetaTrader 5 today.
+        Syncing runs from <span className="mono">mt5_bridge/</span> on your own machine: it attaches
+        to your open MetaTrader terminal and pushes closed trades here. Nothing asks for a broker
+        password, and none is stored — a browser app that could read your credentials would be a way
+        to lose an account, not a journal. Cloud sync that works without your machine running needs a
+        server holding the secret, which is the broker-bridge decision still open in the plan.
         {streamerMode && ' Figures are blurred because Streamer Mode is on.'}
       </Note>
     </Section>

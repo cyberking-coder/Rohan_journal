@@ -12,6 +12,7 @@ import Settings from './pages/Settings'
 import ComingSoon from './pages/ComingSoon'
 import Login from './pages/Login'
 import { useTrades } from './lib/useTrades'
+import { useBrokerAccounts } from './lib/useBrokerAccounts'
 import { useAuth } from './lib/AuthContext'
 import { useView } from './lib/router'
 import { getView } from './lib/views'
@@ -31,6 +32,7 @@ function Journalized({ userId }) {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const { trades, loading, error, addTrade, updateTrade, deleteTrade, clearAllTrades, isSupabaseConfigured } = useTrades(userId)
+  const brokerAccounts = useBrokerAccounts(userId)
 
   const openForm = useCallback(() => { setEditing(null); setFormOpen(true) }, [])
   const openEdit = (trade) => { setEditing(trade); setFormOpen(true) }
@@ -79,10 +81,10 @@ function Journalized({ userId }) {
           >
             {view === 'dashboard' && <Dashboard trades={trades} onAdd={openForm} />}
             {view === 'journal' && <Journal trades={trades} onAdd={openForm} onUpdate={updateTrade} onEdit={openEdit} />}
-            {view === 'trades' && <Trades trades={trades} onAdd={openForm} onDelete={deleteTrade} onEdit={openEdit} onClearAll={clearAllTrades} />}
+            {view === 'trades' && <Trades trades={trades} onAdd={openForm} onDelete={deleteTrade} onEdit={openEdit} onClearAll={clearAllTrades} brokerAccounts={brokerAccounts} />}
             {view === 'analysis' && <Analysis trades={trades} />}
             {view === 'tools' && <Tools />}
-            {view === 'settings' && <Settings trades={trades} onClearAll={clearAllTrades} />}
+            {view === 'settings' && <Settings trades={trades} onClearAll={clearAllTrades} brokerAccounts={brokerAccounts} />}
             {!current?.ready && <ComingSoon view={current} />}
           </motion.div>
         </AnimatePresence>

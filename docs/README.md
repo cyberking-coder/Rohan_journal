@@ -85,11 +85,23 @@ cheap high-value work lands before the expensive infrastructure work.
 - ✅ Preferences: profile visibility, dark mode, **Streamer Mode**, currency display, 76-zone timezone picker, dismissed-notifications restore, Danger Zone — `src/lib/theme.jsx`, `src/lib/format.js`, `supabase/phase4.sql`.
 - ⏸ The news ticker renders its chrome with an honest empty state: the events need the phase 6 calendar feed, and inventing headlines on a trading app would be actively dangerous. Notification toggles are disabled because nothing can deliver them until phases 5/7. Billing is empty because there are no paid tiers (phase 11).
 
-### Phase 5 — Broker accounts & sync *(blocked on a vendor decision)*
-- `broker_accounts` table; multi-account per user; connect / disconnect / sync / favourite / duplicate.
-- Per-account summary strip (P&L, trades, win rate, open positions).
-- Read-only investor-password credentials, encrypted at rest. **Never** store credentials that can place trades.
-- Evaluate MetaApi.cloud vs. extending `mt5_bridge/` into a hosted service.
+### Phase 5 — Broker accounts & sync 🟡 **Done except the vendor-gated part**
+- ✅ `broker_accounts` table with RLS, and a real foreign key from `trades` (ON DELETE SET NULL, so removing an account never deletes its history) — `supabase/phase5.sql`.
+- ✅ Multi-account per user: add / edit / favourite / disconnect / remove, per-account P&L, trades, win rate, open positions and last-sync — `src/components/BrokerAccounts.jsx`, `src/lib/brokerAccounts.js`.
+- ✅ Live sync status derived from real timestamps: connected / idle / stale / never synced / error / disconnected. A stale bridge is visible instead of silently letting the journal drift.
+- ✅ `mt5_bridge/sync.py` registers its own account, stamps `broker_account_id` on every imported trade, and records success or failure so the app can show it.
+- ✅ Trades logged before this phase still appear, grouped by `source` as "not registered" accounts, so nothing goes missing from the switcher.
+- ⛔ **Not built, deliberately:** credential storage and cloud-side sync. See the security note below.
+
+**Why credentials are not stored.** The spec describes storing read-only investor
+passwords. This app is a browser SPA talking straight to Supabase: any column the
+client can read is one that XSS, a malicious extension, or whoever picks up the
+laptop can read too. Storing live broker credentials there turns a journal into a
+way to lose an account. Doing it safely needs a server the browser cannot read
+from — an Edge Function or hosted bridge holding the secret, written once and
+never returned — which is exactly the vendor decision still open. Until then,
+sync runs from `mt5_bridge/` on the user's own machine, attached to a terminal
+they already logged into, and no password is transmitted or stored anywhere.
 
 ### Phase 6 — Economic Calendar (Market) *(blocked on a data feed decision)*
 - Ingest a calendar feed on a schedule into Supabase.
