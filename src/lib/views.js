@@ -18,8 +18,7 @@ export const VIEWS = [
     key: 'trades',
     label: 'Trades',
     icon: '⇅',
-    ready: false,
-    phase: 3,
+    ready: true,
     description: 'Full trade history, account switcher and broker sync actions.',
   },
   {

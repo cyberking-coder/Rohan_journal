@@ -14,6 +14,13 @@ export function filterByRange(trades, rangeKey) {
   return trades.filter((t) => new Date(t.traded_at).getTime() >= cutoff)
 }
 
+// Trade quality on the 1-10 scale, or null if never rated.
+export function ratingOf(t) {
+  if (t?.journal_rating != null) return Number(t.journal_rating)
+  if (t?.rating != null) return Number(t.rating) * 2
+  return null
+}
+
 export function net(t) {
   return (Number(t.pnl) || 0) - (Number(t.fees) || 0)
 }
@@ -33,7 +40,10 @@ export function computeStats(trades) {
   const profitFactor = grossLoss ? grossWin / grossLoss : grossWin ? Infinity : 0
   const avgRR = n ? trades.reduce((s, t) => s + (Number(t.rr) || 0), 0) / n : 0
   const expectancy = n ? netTotal / n : 0
-  const avgRating = n ? trades.reduce((s, t) => s + (Number(t.rating) || 0), 0) / n : 0
+  // Ratings are 1-10 (`journal_rating`); rows written before the phase 3
+  // migration only have the legacy 1-5 star value, so those are doubled.
+  const rated = trades.map(ratingOf).filter((r) => r != null)
+  const avgRating = rated.length ? rated.reduce((s, r) => s + r, 0) / rated.length : 0
 
   return {
     n, wins: wins.length, losses: losses.length,
@@ -213,8 +223,8 @@ export function buildInsights(trades) {
     out.keep.push(`Profit factor of ${s.profitFactor.toFixed(2)} is strong (you make $${s.profitFactor.toFixed(2)} for every $1 lost). Don't change what works.`)
   if (s.avgRR >= 2)
     out.keep.push(`Average R:R of ${s.avgRR.toFixed(2)} is healthy — your risk discipline is paying off.`)
-  if (s.avgRating >= 3.5)
-    out.keep.push(`You rate your execution highly (${s.avgRating.toFixed(1)}/5 avg) and results back it up — trust your process.`)
+  if (s.avgRating >= 7)
+    out.keep.push(`You rate your execution highly (${s.avgRating.toFixed(1)}/10 avg) and results back it up — trust your process.`)
   if (!out.keep.length && s.netTotal > 0)
     out.keep.push(`Overall you're green (${m(s.netTotal)}) in this range — stay consistent.`)
 

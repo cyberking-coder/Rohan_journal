@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { PageHeader, Panel, RangeTabs } from '../components/common'
-import { StatCard, StarRating } from '../components/widgets'
+import { StatCard } from '../components/widgets'
 import { SessionBars } from '../components/charts'
 import {
   filterByRange, computeStats, bySession, byKey, fmtMoney, fmtPct,
-  buildInsights, biggestTrades, net, fmtRR,
+  buildInsights, biggestTrades, net, fmtRR, ratingOf,
 } from '../lib/stats'
 
 export default function Analysis({ trades }) {
@@ -29,10 +29,15 @@ export default function Analysis({ trades }) {
   const { win, loss } = useMemo(() => biggestTrades(scoped), [scoped])
 
   // rating distribution
+  // Ratings are 1-10; bucketed into five bands so the widget stays readable.
   const ratingDist = useMemo(() => {
-    const d = [1, 2, 3, 4, 5].map((r) => ({
-      rating: r,
-      count: scoped.filter((t) => t.rating === r).length,
+    const bands = [[9, 10], [7, 8], [5, 6], [3, 4], [1, 2]]
+    const d = bands.map(([lo, hi]) => ({
+      rating: `${lo}–${hi}`,
+      count: scoped.filter((t) => {
+        const r = ratingOf(t)
+        return r != null && r >= lo && r <= hi
+      }).length,
     }))
     const max = Math.max(1, ...d.map((x) => x.count))
     return d.map((x) => ({ ...x, pct: (x.count / max) * 100 }))
@@ -90,7 +95,7 @@ export default function Analysis({ trades }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 4 }}>
             {ratingDist.map((r, i) => (
               <div key={r.rating} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 84 }}><StarRating value={r.rating} size={13} /></div>
+                <div className="mono" style={{ width: 84, fontSize: 12, color: 'var(--text-2)' }}>{r.rating} / 10</div>
                 <div style={{ flex: 1, height: 12, background: 'var(--track)', borderRadius: 6, overflow: 'hidden' }}>
                   <motion.div initial={{ width: 0 }} animate={{ width: `${r.pct}%` }} transition={{ delay: 0.3 + i * 0.06, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
                     style={{ height: '100%', background: 'linear-gradient(90deg,#23b978,#3ee39a)', borderRadius: 6 }} />

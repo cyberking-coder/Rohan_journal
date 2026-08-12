@@ -14,7 +14,7 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 | 0 | Foundation: routing, shell/nav, top bar, schema superset, filterable stats core | ✅ Done |
 | 1 | Analysis module to full spec (filters, 9 widgets, ~30-metric stats block) | ⏸ Not started |
 | 2 | Tools: Position Size Calculator, Forex Market Hours, tool shell | ✅ Done |
-| 3 | Journal split-pane + Trades page to spec | ⏸ Not started |
+| 3 | Journal split-pane + Trades page to spec | ✅ Done |
 | 4 | Dashboard widgets + Settings tabs & preferences | ⏸ Not started |
 | 5 | Broker accounts & auto-sync | ⛔ Blocked — needs a broker-bridge vendor decision |
 | 6 | Economic Calendar (Market) | ⛔ Blocked — needs a calendar data-feed decision |
@@ -44,6 +44,76 @@ These block or shape later phases. None block Phases 0–4.
 ---
 
 ## Entries
+
+### 2026-08-12 — Phase 3 complete: Journal split-pane and Trades page
+
+**Journal** (`src/pages/Journal.jsx`, `src/lib/journal.js`)
+- Split-pane: left list with All / Journaled / Pending tabs and live counts,
+  symbol-and-notes search, date filter, four sort orders, and NEW badges on
+  un-journaled trades; right pane is the entry form for the selected trade.
+- The five structured fields from the spec, plus planned risk:reward as two
+  inputs and a 1-10 rating slider with a red-to-green track.
+- A completeness meter, and a Save button that only enables when the draft
+  actually differs from what is stored.
+- Selection survives filter changes: if the selected trade is still in the
+  list it stays selected, otherwise it falls back to the first row.
+
+**Trades** (`src/pages/Trades.jsx`, `src/lib/accounts.js`)
+- Account switcher with per-account trade counts and a privacy eye-toggle that
+  masks identifiers, plus a summary strip (P&L, trades, win rate, open
+  positions, last activity).
+- History table per the spec: stacked open/close timestamps, direction badge,
+  entry/exit/size, colour-coded P&L, source badge, row actions.
+- Filters with an active-filter dot and an "N of M trades" count.
+- Copy-trade-summary action, and delete disabled on synced trades with the
+  spec's tooltip.
+- Clear All requires typing DELETE — it wipes every trade and journal entry
+  and cannot be undone.
+
+**Decisions worth recording**
+- *One rating, not two.* The repo had a 1-5 star rating; the spec uses 1-10.
+  Rather than keep two competing fields for the same idea, `journal_rating`
+  (1-10) is now the single field the app reads and writes. The migration is
+  non-destructive: the old `rating` column is left untouched and its values are
+  copied forward doubled (3 stars -> 6/10), and the backfill only touches rows
+  not already migrated, so re-running is a no-op. The trade form's star widget
+  and the Analysis rating distribution were moved onto the new scale, and the
+  now-orphaned `TradeTable`/`StarRating` were deleted rather than left as a
+  trap holding the obsolete scale.
+- *`is_journaled` is a generated column* so it can never disagree with the
+  fields it describes. The same rule is mirrored in JS for optimistic updates
+  and for demo mode, which has no database.
+- *Sync and Disconnect are disabled, not fake.* They need the phase 5 broker
+  bridge; buttons that look live but do nothing are worse than honest ones.
+- *Share copies a summary rather than publishing a link.* Public share URLs
+  are the Trader POV feature in phase 9.
+- *Clear All is scoped by `user_id` explicitly*, not left to RLS alone — a
+  missing policy would otherwise turn it into a much larger delete.
+
+**Verification**
+- `npm test` now runs 134 assertions across three files. The new
+  `test/journal.test.mjs` covers journaled-vs-pending (including
+  whitespace-only fields, and a rating of 0 not being mistaken for unrated),
+  the legacy 1-5 to 1-10 fallback, completion percentages, tab counts, search
+  and all four sorts, non-mutation of the caller's array, planned-ratio
+  formatting, account grouping and summaries, the privacy mask, and the share
+  summary text.
+- `npm run build` passes.
+- Browser pass: tab counts, NEW badges (3 on 4 cards, matching the one
+  journaled trade), save enabling only when dirty, counts updating after save,
+  tab and search filtering, the account switcher and its mask, reveal toggle,
+  account filtering, disabled sync, disabled delete on synced rows, the typed
+  DELETE confirmation, and no horizontal scroll on mobile for either page.
+  No console errors.
+- One bug found and fixed during the pass: the rating slider's gradient was
+  hidden behind the native range track, and "Last Activity" showed a dash when
+  "All accounts" was selected because it read from a single account.
+
+**To apply:** run `supabase/phase3.sql` in the Supabase SQL editor. The app
+reads the new columns with fallbacks, so it works before and after — but
+ratings and journal entries will not persist until it is applied.
+
+---
 
 ### 2026-08-12 — Phase 2 complete: Tools module
 
