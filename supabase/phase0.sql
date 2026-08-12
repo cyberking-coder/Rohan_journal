@@ -35,8 +35,14 @@ update public.trades
 -- `fees` already holds commission and is what every existing UI and the MT5
 -- bridge write to, so it stays the commission column rather than being
 -- duplicated by a second `commission` field that could drift out of sync.
--- `swap` was added by mt5.sql; this makes it non-null so the "Total swap"
--- stat never has to coalesce.
+--
+-- `swap` and `source` normally arrive with mt5.sql. They are declared here too
+-- so this script stands on its own: a migration that fails halfway because an
+-- optional earlier script was skipped leaves the database in a worse state
+-- than one that simply creates what it needs.
+alter table public.trades add column if not exists swap   numeric default 0;
+alter table public.trades add column if not exists source text default 'manual';
+
 alter table public.trades alter column swap set default 0;
 update public.trades set swap = 0 where swap is null;
 alter table public.trades alter column swap set not null;

@@ -80,8 +80,15 @@ create policy "own broker accounts - delete" on public.broker_accounts
 -- ---------------------------------------------------------------------------
 -- Link trades to accounts
 -- ---------------------------------------------------------------------------
--- `broker_account_id` was added in phase 0 without a foreign key, because the
--- table it points at did not exist yet. Now it does.
+-- `broker_account_id` is normally added by phase0.sql, without a foreign key,
+-- because the table it points at did not exist yet. Now it does.
+--
+-- It is declared here as well so this script stands on its own — running it
+-- against a database that never got phase0.sql should create what it needs
+-- rather than fail partway through with the accounts table already made.
+alter table public.trades add column if not exists broker_account_id uuid;
+create index if not exists trades_broker_account_idx on public.trades (broker_account_id);
+
 --
 -- ON DELETE SET NULL, not CASCADE: removing an account must never silently
 -- delete the trade history that belongs to it. The trades fall back to being
