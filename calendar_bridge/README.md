@@ -4,12 +4,67 @@ Populates `public.economic_events`, which the **Market** page reads.
 
 Apply `supabase/phase6.sql` first.
 
-## Why there is no feed built in
+## Feeds
 
-Calendar providers differ in licensing. Some forbid redisplaying their data in
-another app, some require attribution, and the free scraped ones break without
-warning. Picking one is a decision for whoever runs this app — and one worth
-checking the terms on — so this importer takes whatever you give it instead.
+The importer takes whatever you give it: a JSON file, or a registered adapter.
+One adapter ships — `apify`, below. Calendar providers differ in licensing
+(some forbid redisplaying their data, some require attribution) so if you point
+this at a new source, that's worth a look before you do.
+
+## The `apify` provider
+
+Runs the Apify actor `pintostudio/economic-calendar-data-investing-com`, which
+scrapes Investing.com.
+
+```bash
+pip install -r requirements.txt          # includes apify-client
+# .env: APIFY_TOKEN, and APIFY_CALENDAR_TZ — see below
+python import_events.py --provider apify --dry-run
+python import_events.py --provider apify
+```
+
+### Set `APIFY_CALENDAR_TZ` before you trust the times
+
+This is the one setting that will quietly ruin the calendar. The actor
+publishes wall-clock times ("12:30") rather than absolute ones, so the adapter
+has to be told which zone to read them in before converting to UTC. Get it
+wrong and every release is hours out — on a page whose whole purpose is
+countdowns, that is worse than having no calendar at all.
+
+Nothing is guessed: a record with a real offset is used as-is, a bare clock is
+read in `APIFY_CALENDAR_TZ` (default `UTC`), and a record with neither is
+rejected and reported rather than assumed.
+
+**After your first import, check one known release against investing.com.**
+If it's off by a whole number of hours, that's the setting.
+
+### When the actor changes shape
+
+It scrapes a website, so its field names can change without notice. The
+adapter accepts the several spellings this data is commonly published under
+and *reports* what it couldn't map instead of dropping it silently. To see what
+the actor is actually returning:
+
+```bash
+python import_events.py --provider apify --dump --dry-run
+```
+
+That prints the first raw record verbatim; correct the `*_KEYS` lists at the
+top of `apify_investing.py` to match. That's the whole maintenance burden.
+
+Optional filters pass straight through to the actor via `APIFY_TIME_FILTER`,
+`APIFY_IMPORTANCES`, `APIFY_CATEGORIES` and `APIFY_COUNTRY` in `.env`. Note
+that `--days` does **not** drive the actor's window — the actor selects its own
+via `timeFilter`; `--days` only exists for adapters that accept a range.
+
+### Tests
+
+```bash
+python test_adapter.py
+```
+
+45 assertions, weighted heavily toward the timestamp handling — a scraped feed
+read in the wrong timezone looks completely fine and is completely wrong.
 
 ## Setup
 
@@ -60,7 +115,8 @@ Re-importing the same window updates rather than duplicates: rows with an
 
 ## Importing from a provider
 
-Write a function returning raw dicts and register it in `ADAPTERS`:
+Write a function returning raw dicts and register it in `ADAPTERS` (see
+`apify_investing.py` for a real one):
 
 ```python
 def fetch_myfeed(days):
