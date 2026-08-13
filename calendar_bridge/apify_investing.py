@@ -295,7 +295,7 @@ def to_row(raw):
     }
 
 
-def fetch(days=14, dump=False):
+def fetch(days=14, dump=False, dataset_id=None):
     """Run the actor and return raw dicts for import_events.normalize().
 
     `days` is accepted for interface compatibility but the actor windows its
@@ -314,6 +314,16 @@ def fetch(days=14, dump=False):
         raise SystemExit("pip install apify-client")
 
     client = ApifyClient(token)
+
+    # Reading an existing run's dataset instead of starting a new one. Actor
+    # runs cost compute; re-reading what one already produced does not. Useful
+    # when a run succeeded but the write afterwards failed, and when the
+    # account's monthly allowance is spent.
+    if dataset_id:
+        items = list(client.dataset(dataset_id).iterate_items())
+        print(f"Read {len(items)} item(s) from dataset {dataset_id} (no actor run)")
+        return map_items(items, dump)
+
     run_input = {
         # The actor's own window selector. 'time_only' returns the current
         # calendar view; see the README for why `days` doesn't drive this.
@@ -333,7 +343,12 @@ def fetch(days=14, dump=False):
 
     items = list(client.dataset(dataset_id).iterate_items())
     print(f"Apify run {run_id} returned {len(items)} item(s)")
+    print(f"  (re-read later without spending another run: --dataset {dataset_id})")
+    return map_items(items, dump)
 
+
+def map_items(items, dump=False):
+    """Raw dataset items → the loose dicts `normalize()` accepts."""
     if dump:
         import json
         print("\n--- first raw item, verbatim ---")

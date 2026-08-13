@@ -40,6 +40,26 @@ at 06:00 UTC (the ONS's 07:00 London slot) and NZ ones at 03:00 UTC (RBNZ's
 15:00 NZST), so the default `UTC` is correct. If you ever see everything off by
 a whole number of hours, this is the setting.
 
+### Re-reading a run without spending another one
+
+Actor runs consume your Apify compute allowance; re-reading a dataset a run
+already produced does not. Every run prints its dataset id, so:
+
+```bash
+python import_events.py --provider apify --dataset <dataset-id>
+```
+
+Use it when a run succeeded but the write afterwards failed, and when the
+account's monthly allowance is spent (`ForbiddenError: Monthly usage hard limit
+exceeded` — that's the account, not this code).
+
+If the API refuses even that, export the dataset from the Apify console as
+JSON and use the file path, which needs no API at all:
+
+```bash
+python import_events.py --file dataset.json --source apify
+```
+
 ### When the actor changes shape
 
 It scrapes a website, so its field names can change without notice. The

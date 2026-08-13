@@ -122,10 +122,10 @@ def normalize(raw, source):
 # Before adding one, check its terms actually permit redisplaying the data in
 # your app.
 
-def _apify(days, dump=False):
+def _apify(days, dump=False, dataset=None):
     # Imported lazily so `--file` and `--dry-run` never need apify-client.
     from apify_investing import fetch
-    return fetch(days, dump=dump)
+    return fetch(days, dump=dump, dataset_id=dataset)
 
 
 ADAPTERS = {"apify": _apify}
@@ -217,6 +217,10 @@ def main():
     parser.add_argument("--days", type=int, default=14, help="how far ahead to fetch")
     parser.add_argument("--source", help="label stored on each row (defaults to the provider or filename)")
     parser.add_argument("--dry-run", action="store_true", help="normalize and report without writing")
+    parser.add_argument("--dataset",
+                        help="re-read an existing Apify dataset by id instead of starting a new "
+                             "actor run — costs no compute, and works when a run succeeded but "
+                             "the write afterwards didn't")
     parser.add_argument("--dump", action="store_true",
                         help="print the provider's first raw record — use when a feed changes shape")
     args = parser.parse_args()
@@ -229,7 +233,7 @@ def main():
             print(f"No adapter named {args.provider!r}. Registered: {', '.join(ADAPTERS) or 'none'}")
             print("Add one in ADAPTERS — see the comment above it.")
             sys.exit(1)
-        raw_events = ADAPTERS[args.provider](args.days, dump=args.dump)
+        raw_events = ADAPTERS[args.provider](args.days, dump=args.dump, dataset=args.dataset)
         source = args.source or args.provider
     else:
         raw_events = load_from_file(args.file)
