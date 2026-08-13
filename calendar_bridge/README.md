@@ -46,8 +46,12 @@ Actor runs consume your Apify compute allowance; re-reading a dataset a run
 already produced does not. Every run prints its dataset id, so:
 
 ```bash
-python import_events.py --provider apify --dataset <dataset-id>
+python import_events.py --provider apify --dataset <run-id-or-dataset-id>
 ```
+
+Either id works — run ids and dataset ids look identical (17 opaque
+characters) but aren't interchangeable, so a run id is looked up and its
+default dataset used.
 
 Use it when a run succeeded but the write afterwards failed, and when the
 account's monthly allowance is spent (`ForbiddenError: Monthly usage hard limit
