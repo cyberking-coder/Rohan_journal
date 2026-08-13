@@ -65,7 +65,7 @@ via `timeFilter`; `--days` only exists for adapters that accept a range.
 python test_adapter.py
 ```
 
-67 assertions, weighted heavily toward the timestamp handling — a scraped feed
+65 assertions, weighted heavily toward the timestamp handling — a scraped feed
 read in the wrong timezone, or with its dates read in the wrong order, looks
 completely fine and is completely wrong. Several run against a verbatim record
 from a real actor run, so they break if the feed changes shape.
@@ -75,6 +75,12 @@ Two things worth knowing about this feed:
 - **Dates are `DD/MM/YYYY`.** Slash dates are ambiguous for the first twelve
   days of every month, and a wrong reading doesn't error — it files releases in
   the wrong month. Pinned and asserted.
+- **The feed repeats rows, and reuses its `id` across different releases.**
+  A single `ON CONFLICT` statement can't touch the same row twice — Postgres
+  raises `21000` and the whole import fails — so rows are deduplicated before
+  the write. Identical repeats collapse (the later one wins, so a published
+  figure isn't wiped back to blank); an id covering two genuinely different
+  releases keeps both, keyed on the release itself rather than dropping one.
 - **Holidays arrive with `time: "All Day"` and no currency.** They're kept
   (pinned to midnight, currency derived from the country) rather than dropped —
   a bank holiday is exactly what explains a dead session. That's why

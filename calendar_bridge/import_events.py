@@ -142,6 +142,60 @@ def load_from_file(path):
 # Import
 # ---------------------------------------------------------------------------
 
+def identity(row):
+    """What actually makes a release distinct, regardless of provider ids."""
+    return (row["event_at"], row["currency"], row["title"])
+
+
+def dedupe(rows):
+    """Collapse rows sharing a conflict key, because Postgres won't.
+
+    A single `ON CONFLICT DO UPDATE` cannot affect the same row twice — it
+    raises 21000 and the entire import fails. Feeds duplicate rows routinely,
+    and this one reuses its `id` across different releases, so this has to be
+    handled here rather than hoped away.
+
+    Two distinct cases, treated differently on purpose:
+
+      * Same key, same release — the feed listed it twice, or an earlier row
+        lacks a figure the later one has. The later row wins.
+      * Same key, *different* releases — the provider's id is not unique.
+        Dropping one would silently lose an event, so the natural key is
+        appended to tell them apart. It's deterministic, so re-imports still
+        land on the same row.
+    """
+    # Which keys cover more than one distinct release is worked out up front,
+    # over the whole batch. Deciding it as rows arrive would make the result
+    # depend on their order: whichever release turned up first would keep the
+    # bare id and the other would get suffixed, so a feed that returned them
+    # the other way round next time would write a second copy of both. This
+    # way a key's fate is the same regardless of order, which is what makes
+    # re-imports land on the same rows.
+    ambiguous = {}
+    for row in rows:
+        ambiguous.setdefault((row["source"], row["external_id"]), set()).add(identity(row))
+    ambiguous = {k for k, ids in ambiguous.items() if len(ids) > 1}
+
+    kept, collisions = {}, 0
+    for row in rows:
+        key = (row["source"], row["external_id"])
+        if key in ambiguous:
+            # Every member of a colliding group is suffixed, not just the
+            # later arrivals — see above.
+            row = {**row, "external_id": f"{row['external_id']}|{'|'.join(identity(row))}"}
+            key = (row["source"], row["external_id"])
+            collisions += 1
+        kept[key] = row
+
+    dropped = len(rows) - len(kept)
+    if dropped:
+        print(f"  collapsed {dropped} duplicate row(s)")
+    if collisions:
+        print(f"  {collisions} row(s) shared a provider id with a different "
+              f"release — kept both, keyed on the release itself")
+    return list(kept.values())
+
+
 def upsert(sb, rows):
     """Write every row through the one unique key, (source, external_id).
 
@@ -149,6 +203,7 @@ def upsert(sb, rows):
     natural key — so a single conflict target covers providers that give ids
     and those that don't.
     """
+    rows = dedupe(rows)
     if rows:
         sb.table("economic_events").upsert(
             rows, on_conflict="source,external_id").execute()
@@ -188,6 +243,10 @@ def main():
             skipped.append((raw.get("title") or raw.get("event") or "?", str(e)))
 
     print(f"Normalized {len(rows)} event(s) from {source}")
+    # Done here as well as in upsert() so `--dry-run` reports duplicates
+    # instead of letting the real run be the first to mention them. The second
+    # pass has nothing left to collapse and stays quiet.
+    rows = dedupe(rows)
     for title, reason in skipped:
         print(f"  skipped {title!r}: {reason}")
 
