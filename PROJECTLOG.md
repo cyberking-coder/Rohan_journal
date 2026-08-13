@@ -17,7 +17,7 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 | 3 | Journal split-pane + Trades page to spec | ✅ Done |
 | 4 | Dashboard widgets + Settings tabs & preferences | ✅ Done |
 | 5 | Broker accounts & auto-sync | 🟡 Done except credential-based cloud sync (vendor-gated) |
-| 6 | Economic Calendar (Market) | ⛔ Blocked — needs a calendar data-feed decision |
+| 6 | Economic Calendar (Market) | 🟡 Done except choosing a feed (licensing decision) |
 | 7 | AI Report generation + weekly quota | ⏸ Not started |
 | 8 | Backtesting (candle replay) | ⏸ Not started |
 | 9 | Trader POV / shared read-only dashboards | ⏸ Not started |
@@ -34,8 +34,10 @@ These block or shape later phases. None block Phases 0–4.
    account model and self-hosted sync without it. What it still gates is sync that
    works while your machine is off, which needs a server holding the credential
    (MetaApi.cloud, a hosted bridge, or a custom EA + webhook).
-2. **Economic calendar feed** — which provider, and whether its licence permits
-   redisplay. Affects Phase 6 and the Dashboard news ticker.
+2. **Economic calendar feed** — still open, but no longer blocking: phase 6 shipped
+   the table, page, ticker and importer without it. What remains is picking a
+   provider and checking its terms permit redisplay, then writing a ~5-line adapter
+   in `calendar_bridge/`.
 3. **Auth provider** — the spec documents Clerk; this repo uses Supabase Auth with RLS.
    Recommendation: stay on Supabase Auth. Awaiting confirmation.
 4. **Scope of Community and Billing** — both add permanent operational and moderation
@@ -46,6 +48,80 @@ These block or shape later phases. None block Phases 0–4.
 ---
 
 ## Entries
+
+### 2026-08-13 — Phase 6: economic calendar (feed choice excluded)
+
+The second phase marked blocked. As with phase 5, most of it did not actually
+depend on the blocked decision.
+
+**Built**
+- `economic_events` table. Read-only from the browser by design: this is shared
+  reference data, and a client that could write here could feed every user of
+  the app false economic figures. Only the importer's service role writes.
+- Market page — day tabs, impact filters, country filter, search, event counts,
+  live countdowns, a NEXT UP badge, and expandable rows showing whether the
+  release beat or missed its forecast.
+- Dashboard ticker now shows real high and medium impact releases, filtered to
+  upcoming, and says plainly when the calendar isn't populated.
+- `calendar_bridge/import_events.py` — takes a JSON file or a registered
+  provider adapter, normalizes the common field-name variations, and upserts
+  idempotently.
+
+**Not built, deliberately: a bundled feed.**
+Calendar providers differ in licensing — some forbid redisplaying their data in
+another app, some require attribution, some are scraped and break without
+warning. Picking one is a decision for whoever runs this app, and one worth
+reading the terms on, so the importer takes whatever you give it instead.
+Adding a provider is about five lines in `ADAPTERS`.
+
+**Decisions worth recording**
+- *Day boundaries are computed in the user's timezone*, not the browser's and
+  not UTC. Otherwise "Today" shows yesterday's releases for anyone far enough
+  east or west. Tests pin this: an event at 23:00 UTC is today in London,
+  tomorrow in Tokyo, and still today in New York.
+- *Released values stay text.* `3.2%` and `250K` carry units a numeric column
+  would destroy, and parsing them into floats would invent precision the source
+  never gave.
+- *Beat/miss refuses to compare mismatched units.* Comparing `250K` against
+  `3.2%` would produce a confident, meaningless verdict, so it returns nothing.
+- *A naive timestamp is rejected, not guessed at.* Assuming a zone would
+  silently shift every release in the import.
+- *Past events with no published figure read "due now", not "released"* — the
+  actual often lands a minute or two after the scheduled time.
+
+**Two bugs found by testing, not by reading**
+- The unique indexes were **partial** (`where external_id is not null`).
+  PostgREST's upsert cannot infer a partial index, so every import would have
+  failed at runtime with "no unique or exclusion constraint matching the ON
+  CONFLICT specification". Replaced with one non-partial key; the importer now
+  always sets `external_id`, falling back to the release's natural key.
+  Caught by running the SQL against a real PostgreSQL 16 instance.
+- `test/analytics.test.mjs` had a date-dependent assertion that broke when the
+  clock rolled past midnight into Aug 13. Rewritten to construct "today"
+  relative to now rather than relying on fixed sample dates.
+
+**Verification**
+- `npm test` now runs 280 assertions across six files. The new
+  `test/calendar.test.mjs` covers timezone day boundaries in three zones, all
+  five day tabs, impact/country/search filters and their combinations, grouping,
+  next-up selection, every countdown branch, unit-aware release parsing, and the
+  beat/miss logic including its refusal on mismatched units.
+- SQL verified against real PostgreSQL 16: full chain applies, phase 6 is
+  idempotent, both upsert paths update in place rather than duplicating, a
+  different source with the same id stays a separate row, and the impact check
+  constraint rejects an invalid value.
+- Importer verified end-to-end on a fixture covering epoch seconds, a `+01:00`
+  offset, alternate field names and numeric impact codes — plus three malformed
+  records that were each rejected with a specific reason.
+- Browser pass with injected fixture data (reverted before commit): rows,
+  grouping, NEXT UP, countdowns, filters, expansion and the ticker all correct.
+  Empty state verified separately as honest. No console errors.
+
+**To apply:** run `supabase/phase6.sql`, then populate via `calendar_bridge/`.
+Until then the page and ticker say they aren't set up rather than showing
+invented events.
+
+---
 
 ### 2026-08-12 — Phase 5: broker accounts (vendor-gated part excluded)
 

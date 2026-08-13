@@ -39,8 +39,7 @@ export const VIEWS = [
     key: 'market',
     label: 'Market',
     icon: '◎',
-    ready: false,
-    phase: 6,
+    ready: true,
     description: 'Economic calendar with impact filters and countdowns.',
   },
   {
