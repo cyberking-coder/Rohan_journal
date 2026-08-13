@@ -103,13 +103,14 @@ never returned — which is exactly the vendor decision still open. Until then,
 sync runs from `mt5_bridge/` on the user's own machine, attached to a terminal
 they already logged into, and no password is transmitted or stored anywhere.
 
-### Phase 6 — Economic Calendar (Market) 🟡 **Done except choosing a feed**
+### Phase 6 — Economic Calendar (Market) ✅ **Done**
 - ✅ `economic_events` table, read-only from the browser by design — a client that could write here could feed every user false economic data. `supabase/phase6.sql`.
 - ✅ Market page: day tabs (Upcoming / Today / Tomorrow / This Week / All), impact filters, country filter, search, event counts, live countdowns, NEXT UP badge, expandable rows with beat/miss against forecast.
 - ✅ Day boundaries computed in the user's timezone, not the browser's — otherwise "Today" shows the wrong day for anyone far enough east or west.
 - ✅ Dashboard ticker shows real high and medium impact releases once populated.
 - ✅ `calendar_bridge/import_events.py` — provider-agnostic importer taking a JSON file or a small adapter, with idempotent upserts.
-- ⛔ **No feed is bundled**, deliberately. Providers differ in licensing: some forbid redisplay, some require attribution, some are scraped and break. That choice — and checking its terms — belongs to whoever runs the app. Adding one is a ~5-line adapter; nothing else changes.
+- ✅ Feed chosen: the Apify actor `pintostudio/economic-calendar-data-investing-com`. `calendar_bridge/apify_investing.py`, registered as `--provider apify`. The file-based and adapter seams are unchanged, so swapping providers later is still one small file.
+- ⚠️ `APIFY_CALENDAR_TZ` must match the zone the actor publishes its clock times in. Nothing is guessed — records with a real offset use it, bare clocks are read in that zone, and records with neither are rejected and reported. Check one known release after the first import.
 
 ### Phase 7 — AI Report ✅ **Done** (needs a key to run)
 - ✅ `ai_reports` table with RLS that allows **select and delete only** — no client insert. `supabase/phase7.sql`.

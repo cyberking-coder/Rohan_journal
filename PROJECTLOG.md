@@ -17,7 +17,7 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 | 3 | Journal split-pane + Trades page to spec | ✅ Done |
 | 4 | Dashboard widgets + Settings tabs & preferences | ✅ Done |
 | 5 | Broker accounts & auto-sync | 🟡 Done except credential-based cloud sync (vendor-gated) |
-| 6 | Economic Calendar (Market) | 🟡 Done except choosing a feed (licensing decision) |
+| 6 | Economic Calendar (Market) | ✅ Done — feed chosen (Apify / Investing.com) |
 | 7 | AI Report generation + weekly quota | ✅ Done — needs an Anthropic API key to run |
 | 8 | Backtesting (candle replay) | ⏸ Not started |
 | 9 | Trader POV / shared read-only dashboards | ⏸ Not started |
@@ -34,10 +34,10 @@ These block or shape later phases. None block Phases 0–4.
    account model and self-hosted sync without it. What it still gates is sync that
    works while your machine is off, which needs a server holding the credential
    (MetaApi.cloud, a hosted bridge, or a custom EA + webhook).
-2. **Economic calendar feed** — still open, but no longer blocking: phase 6 shipped
-   the table, page, ticker and importer without it. What remains is picking a
-   provider and checking its terms permit redisplay, then writing a ~5-line adapter
-   in `calendar_bridge/`.
+2. ~~**Economic calendar feed**~~ — **decided.** The Apify actor
+   `pintostudio/economic-calendar-data-investing-com`, wired up as
+   `--provider apify`. The provider seam is unchanged, so switching later is still
+   one file.
 3. **Auth provider** — the spec documents Clerk; this repo uses Supabase Auth with RLS.
    Recommendation: stay on Supabase Auth. Awaiting confirmation.
 4. **Scope of Community and Billing** — both add permanent operational and moderation
@@ -48,6 +48,45 @@ These block or shape later phases. None block Phases 0–4.
 ---
 
 ## Entries
+
+### 2026-08-13 — Calendar feed: Apify / Investing.com adapter
+
+Closes the last open decision from phase 6.
+
+**Built**
+- `calendar_bridge/apify_investing.py` — adapter for the Apify actor, wired in
+  as `--provider apify`.
+- `--dump` on the importer, printing the provider's first raw record. This is a
+  scraped feed; its field names will drift, and this is what turns that from a
+  mystery into a one-line fix.
+- `test_adapter.py` — 45 assertions, no framework.
+
+**Two bugs the tests caught before this ever ran**
+- A record carrying both `date` and `time` had its clock silently discarded:
+  the key lookup found `date` first, parsed it as a valid midnight, and
+  imported every release at 00:00. Nothing would have looked broken. Bare
+  clocks are now searched for across the time-ish keys *before* the general
+  lookup.
+- `parse_date_only` used a length-slicing trick to strip trailing times that
+  worked by accident on some layouts and not others. Replaced with explicit
+  epoch / ISO / strptime branches.
+
+**The setting that matters**
+`APIFY_CALENDAR_TZ`. The actor publishes wall-clock times, so the zone has to
+be supplied. Nothing is guessed — a real offset in the data wins, a bare clock
+is read in the configured zone, and a record with neither is rejected and
+reported rather than assumed. It carries DST properly (the same 08:30 New York
+clock lands on 12:30 UTC in August and 13:30 in January), which a fixed offset
+would get wrong for half the year.
+
+**Not verified here**
+The actor's exact output shape. `apify.com` is blocked by this environment's
+egress proxy, so the field mapping is written against the layouts this data is
+commonly published under rather than against a real response. The adapter
+reports what it couldn't map instead of dropping it, so the first real run will
+say plainly whether the mapping is right.
+
+---
 
 ### 2026-08-13 — Phase 7: AI report
 
