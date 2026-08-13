@@ -67,9 +67,13 @@ console.log('— filters —')
 eq('Winners only',   filterTrades(trades, { period: 'all', tradeType: 'winners' }).length, 1)
 eq('Losers only',    filterTrades(trades, { period: 'all', tradeType: 'losers' }).length, 9)
 eq('All time',       filterTrades(trades, { period: 'all' }).length, 10)
-// The sample data is dated Aug 10-12 and today is Aug 12, so three trades
-// legitimately fall inside "Today"; an older trade must fall outside it.
-eq('Today',          filterTrades(trades, { period: 'today' }).length, 3)
+// "Today" must be tested against a trade that is actually today, not against
+// the fixed sample dates — those stop being "today" the moment the clock rolls
+// past midnight, which is exactly how this assertion broke once already.
+const todayTrade = { ...mk(1, 12.5), closed_at: new Date().toISOString(), traded_at: new Date().toISOString() }
+eq('Today includes a trade from today', filterTrades([todayTrade], { period: 'today' }).length, 1)
+eq('Today excludes the fixed sample', filterTrades(trades, { period: 'today' })
+  .every((t) => new Date(t.closed_at).toDateString() === new Date().toDateString()), true)
 const stale = [{ ...mk(10,-5), closed_at: '2020-01-01T00:00:00Z', traded_at: '2020-01-01T00:00:00Z' }]
 eq('Today excludes old', filterTrades(stale, { period: 'today' }).length, 0)
 eq('1y excludes 2020',   filterTrades(stale, { period: '1y' }).length, 0)

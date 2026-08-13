@@ -9,6 +9,7 @@ import Analysis from './pages/Analysis'
 import Tools from './pages/Tools'
 import Trades from './pages/Trades'
 import Settings from './pages/Settings'
+import Market from './pages/Market'
 import ComingSoon from './pages/ComingSoon'
 import Login from './pages/Login'
 import { useTrades } from './lib/useTrades'
@@ -83,6 +84,7 @@ function Journalized({ userId }) {
             {view === 'journal' && <Journal trades={trades} onAdd={openForm} onUpdate={updateTrade} onEdit={openEdit} />}
             {view === 'trades' && <Trades trades={trades} onAdd={openForm} onDelete={deleteTrade} onEdit={openEdit} onClearAll={clearAllTrades} brokerAccounts={brokerAccounts} />}
             {view === 'analysis' && <Analysis trades={trades} />}
+            {view === 'market' && <Market />}
             {view === 'tools' && <Tools />}
             {view === 'settings' && <Settings trades={trades} onClearAll={clearAllTrades} brokerAccounts={brokerAccounts} />}
             {!current?.ready && <ComingSoon view={current} />}
