@@ -35,8 +35,10 @@ Nothing is guessed: a record with a real offset is used as-is, a bare clock is
 read in `APIFY_CALENDAR_TZ` (default `UTC`), and a record with neither is
 rejected and reported rather than assumed.
 
-**After your first import, check one known release against investing.com.**
-If it's off by a whole number of hours, that's the setting.
+**Confirmed against a real run: this actor publishes UTC.** UK releases land
+at 06:00 UTC (the ONS's 07:00 London slot) and NZ ones at 03:00 UTC (RBNZ's
+15:00 NZST), so the default `UTC` is correct. If you ever see everything off by
+a whole number of hours, this is the setting.
 
 ### When the actor changes shape
 
@@ -63,8 +65,21 @@ via `timeFilter`; `--days` only exists for adapters that accept a range.
 python test_adapter.py
 ```
 
-45 assertions, weighted heavily toward the timestamp handling — a scraped feed
-read in the wrong timezone looks completely fine and is completely wrong.
+67 assertions, weighted heavily toward the timestamp handling — a scraped feed
+read in the wrong timezone, or with its dates read in the wrong order, looks
+completely fine and is completely wrong. Several run against a verbatim record
+from a real actor run, so they break if the feed changes shape.
+
+Two things worth knowing about this feed:
+
+- **Dates are `DD/MM/YYYY`.** Slash dates are ambiguous for the first twelve
+  days of every month, and a wrong reading doesn't error — it files releases in
+  the wrong month. Pinned and asserted.
+- **Holidays arrive with `time: "All Day"` and no currency.** They're kept
+  (pinned to midnight, currency derived from the country) rather than dropped —
+  a bank holiday is exactly what explains a dead session. That's why
+  `COUNTRY_TO_CURRENCY` is long. A country not in it is skipped and named in
+  the output, rather than becoming a three-letter pseudo-currency.
 
 ## Setup
 
