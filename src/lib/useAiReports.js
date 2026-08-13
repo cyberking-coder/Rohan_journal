@@ -64,7 +64,7 @@ export function useAiReports() {
         // response body, so it's worth digging out rather than showing
         // "Edge Function returned a non-2xx status code".
         const detail = await readFunctionError(err)
-        setError(detail || err.message)
+        setError(detail || describeInvokeFailure(err))
         return null
       }
       if (data?.error) {
@@ -89,6 +89,19 @@ export function useAiReports() {
   }, [fetchReports])
 
   return { reports, loading, error, ready, generating, generate, remove, refetch: fetchReports, clearError: () => setError(null) }
+}
+
+// supabase-js reports "Failed to send a request to the Edge Function" when the
+// request never lands — overwhelmingly because the function was never
+// deployed. That message describes the symptom; this one describes the cause
+// and the fix, which is the difference between a dead end and a next step.
+function describeInvokeFailure(err) {
+  const message = err?.message || 'Unknown error'
+  if (/failed to send a request|fetch/i.test(message)) {
+    return 'Couldn’t reach the generate-report function — it looks like it hasn’t been '
+      + 'deployed yet. Run: supabase functions deploy generate-report'
+  }
+  return message
 }
 
 async function readFunctionError(err) {
