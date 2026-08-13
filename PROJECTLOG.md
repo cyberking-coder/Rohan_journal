@@ -18,7 +18,7 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 | 4 | Dashboard widgets + Settings tabs & preferences | ✅ Done |
 | 5 | Broker accounts & auto-sync | 🟡 Done except credential-based cloud sync (vendor-gated) |
 | 6 | Economic Calendar (Market) | 🟡 Done except choosing a feed (licensing decision) |
-| 7 | AI Report generation + weekly quota | ⏸ Not started |
+| 7 | AI Report generation + weekly quota | ✅ Done — needs an Anthropic API key to run |
 | 8 | Backtesting (candle replay) | ⏸ Not started |
 | 9 | Trader POV / shared read-only dashboards | ⏸ Not started |
 | 10 | Community (lounges, leaderboard, affiliate) | ⏸ Not started — scope not confirmed |
@@ -48,6 +48,45 @@ These block or shape later phases. None block Phases 0–4.
 ---
 
 ## Entries
+
+### 2026-08-13 — Phase 7: AI report
+
+**Built**
+- `ai_reports` table. The RLS is the design: select and delete for the owner,
+  and **no insert policy at all**. A client that could insert here could mint
+  itself unlimited reports, so the only writer is the edge function.
+- `supabase/functions/generate-report/` — Deno edge function. Holds the
+  Anthropic key, takes identity from the caller's verified JWT (never from the
+  request body), counts the week's reports before spending anything, calls
+  `claude-opus-5` with adaptive thinking and a strict JSON schema, and inserts
+  the result with the service role.
+- Weekly quota of 3, bucketed to Monday 00:00 UTC. The reset timer in the UI
+  and the count in the function run the same rule; the client copy is
+  explicitly advisory, and the comment in both files says so.
+- AI Report page: featured latest report, expandable archive, per-section tone
+  (strength / watch / fix), delete-with-confirm, and a setup panel that tells
+  you exactly what's missing instead of showing a button that can't work.
+- `summariseTrades` condenses history — including journal notes, clipped — into
+  what the prompt is built from. A report written from P&L alone would just be
+  the dashboard in prose.
+- 53 new assertions in `test/aireport.test.mjs`, mostly on the week boundary:
+  Sunday belonging to the week *before*, month and year rollovers, and quota
+  never going negative and turning into extra credit.
+
+**Verified**
+- `npm test` — 333 assertions, all passing. `npm run build` clean.
+- `phase7.sql` run against PostgreSQL 16 three times: idempotent, policies are
+  select+delete only, `on delete cascade` from `auth.users` confirmed.
+- Browser pass on the page in both the not-set-up state and with reports
+  present.
+
+**Not done**
+- No API key is bundled, obviously. Generation costs money, and whose money it
+  is is the operator's decision. The page is explicit about the two steps.
+- The function is written but not deployed from here — deploying needs the
+  Supabase CLI logged into the project.
+
+---
 
 ### 2026-08-13 — Phase 6: economic calendar (feed choice excluded)
 

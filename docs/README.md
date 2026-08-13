@@ -111,10 +111,13 @@ they already logged into, and no password is transmitted or stored anywhere.
 - ✅ `calendar_bridge/import_events.py` — provider-agnostic importer taking a JSON file or a small adapter, with idempotent upserts.
 - ⛔ **No feed is bundled**, deliberately. Providers differ in licensing: some forbid redisplay, some require attribution, some are scraped and break. That choice — and checking its terms — belongs to whoever runs the app. Adding one is a ~5-line adapter; nothing else changes.
 
-### Phase 7 — AI Report
-- Server-side generation function (keeps the API key off the client).
-- Prompt over trade + journal history → punchy title + structured report.
-- Weekly per-user quota with a visible reset timer; report archive with expandable history.
+### Phase 7 — AI Report ✅ **Done** (needs a key to run)
+- ✅ `ai_reports` table with RLS that allows **select and delete only** — no client insert. `supabase/phase7.sql`.
+- ✅ `supabase/functions/generate-report/` — Supabase Edge Function holding the Anthropic key, verifying the caller's JWT, counting the week's usage against the database, calling `claude-opus-5` with adaptive thinking and a strict JSON schema, and writing the row.
+- ✅ Weekly quota of 3, bucketed to Monday 00:00 UTC, with the reset timer drawn from the same week-boundary rule the function enforces.
+- ✅ AI Report page: featured latest report, expandable archive of earlier ones, per-section tone (strength / watch / fix), delete with confirm, and honest empty/setup states.
+- ✅ The prompt is given the journal notes, not just P&L — a review written from numbers alone just restates the dashboard.
+- ⚠️ **Requires an Anthropic API key** set as a function secret. Without it the page explains the two setup steps rather than offering a button that can't work. This is a cost decision for whoever runs the app, not a code gap.
 
 ### Phase 8 — Backtesting
 - Session CRUD + empty state.

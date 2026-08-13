@@ -46,8 +46,7 @@ export const VIEWS = [
     key: 'ai-report',
     label: 'AI Report',
     icon: '✦',
-    ready: false,
-    phase: 7,
+    ready: true,
     description: 'AI-written performance reviews of your trading.',
   },
   {
