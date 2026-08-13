@@ -283,8 +283,15 @@ def fetch(days=14, dump=False):
     }
 
     run = client.actor(ACTOR).call(run_input=run_input)
-    items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
-    print(f"Apify run {run.get('id')} returned {len(items)} item(s)")
+
+    # apify-client 3.x returns a `Run` object with snake_case attributes;
+    # 1.x returned a plain dict with the camelCase wire names. Both are
+    # accepted so an older pinned client doesn't break this.
+    dataset_id = run.default_dataset_id if hasattr(run, "default_dataset_id") else run["defaultDatasetId"]
+    run_id = getattr(run, "id", None) or (run.get("id") if isinstance(run, dict) else None)
+
+    items = list(client.dataset(dataset_id).iterate_items())
+    print(f"Apify run {run_id} returned {len(items)} item(s)")
 
     if dump:
         import json
