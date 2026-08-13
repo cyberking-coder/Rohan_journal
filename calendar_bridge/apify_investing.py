@@ -61,6 +61,24 @@ COUNTRY_TO_CURRENCY = {
     "india": "INR", "brazil": "BRL", "mexico": "MXN",
     "south africa": "ZAR", "russia": "RUB", "turkey": "TRY",
     "south korea": "KRW", "korea": "KRW", "norway": "NOK", "sweden": "SEK",
+    # The rest of what a real run returns — mostly needed for holiday rows,
+    # which carry a country but no currency.
+    "belgium": "EUR", "austria": "EUR", "finland": "EUR", "slovakia": "EUR",
+    "slovenia": "EUR", "estonia": "EUR", "latvia": "EUR", "lithuania": "EUR",
+    "cyprus": "EUR", "malta": "EUR", "luxembourg": "EUR", "croatia": "EUR",
+    "poland": "PLN", "czech republic": "CZK", "hungary": "HUF",
+    "romania": "RON", "serbia": "RSD", "denmark": "DKK", "iceland": "ISK",
+    "philippines": "PHP", "thailand": "THB", "indonesia": "IDR",
+    "malaysia": "MYR", "vietnam": "VND", "taiwan": "TWD", "pakistan": "PKR",
+    "bangladesh": "BDT", "sri lanka": "LKR",
+    "saudi arabia": "SAR", "israel": "ILS", "oman": "OMR", "qatar": "QAR",
+    "kuwait": "KWD", "bahrain": "BHD", "jordan": "JOD", "lebanon": "LBP",
+    "united arab emirates": "AED", "egypt": "EGP", "tunisia": "TND",
+    "morocco": "MAD", "nigeria": "NGN", "kenya": "KES", "uganda": "UGX",
+    "namibia": "NAD", "ghana": "GHS", "zambia": "ZMW", "botswana": "BWP",
+    "argentina": "ARS", "chile": "CLP", "colombia": "COP", "peru": "PEN",
+    "venezuela": "VES", "ukraine": "UAH", "kazakhstan": "KZT",
+    "türkiye": "TRY", "turkiye": "TRY",
 }
 
 # Investing.com's own importance vocabulary, in every spelling seen in the wild.
@@ -79,6 +97,9 @@ IMPACT_KEYS = ("importance", "impact", "volatility", "importanceLevel", "sentime
 ID_KEYS = ("id", "eventId", "event_id", "_id", "rowId")
 
 CLOCK = re.compile(r"^(\d{1,2}):(\d{2})(?::(\d{2}))?$")
+
+# What this feed puts in the time column when there is no clock time.
+ALL_DAY_LABELS = {"all day", "allday", "tentative", "holiday", "-", ""}
 
 
 def first(raw, keys):
@@ -123,6 +144,15 @@ def resolve_event_at(raw):
             break
     if clock:
         return from_clock(raw, clock)
+
+    # Holidays and undated releases carry a label where the clock goes:
+    # "All Day", "Tentative", "Holiday". These matter on a forex calendar —
+    # an all-day bank holiday is exactly the kind of thing that explains a
+    # dead session — so they're kept, pinned to midnight in the configured
+    # zone rather than dropped.
+    label = raw.get("time")
+    if isinstance(label, str) and label.strip().lower() in ALL_DAY_LABELS:
+        return from_clock(raw, CLOCK.match("00:00"))
 
     value = first(raw, TIME_KEYS)
     if value is None:
@@ -190,7 +220,15 @@ def parse_date_only(text):
     # Only the date part is fed to strptime; several of these layouts appear
     # with a time trailing them.
     head = text.split("T")[0].split(" ")[0] if "-" in text or "/" in text else text
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y/%m/%d"):
+
+    # DD/MM/YYYY comes first, and that ordering is load-bearing rather than
+    # arbitrary: this actor publishes "13/08/2026". Slash dates are ambiguous
+    # for the first twelve days of every month — 08/09/2026 is a valid date
+    # under both readings — so a wrong guess doesn't fail, it silently files
+    # releases in the wrong month. Confirmed DD/MM against a real run; if you
+    # point this at a US-formatted feed, this is the line to change, and
+    # `test_adapter.py` has the assertion that will tell you.
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%m/%d/%Y"):
         try:
             return datetime.strptime(head, fmt)
         except ValueError:
@@ -214,9 +252,12 @@ def to_currency(raw):
         mapped = COUNTRY_TO_CURRENCY.get(str(country).strip().lower())
         if mapped:
             return mapped
-        # An unmapped country is not fatal — normalize() will reject it and the
-        # importer will print it, which is how the map above gets extended.
-        return str(country).strip().upper()
+        # Deliberately raises rather than falling back to the country name.
+        # `normalize()` truncates to three characters, so "tunisia" would have
+        # become the currency "TUN" — a plausible-looking value that is not a
+        # currency at all, sitting in the page's filter forever. Better to skip
+        # the row and print it; the message names the country to add above.
+        raise ValueError(f"country {str(country).strip()!r} isn't in COUNTRY_TO_CURRENCY")
     raise ValueError("no currency or recognisable country")
 
 

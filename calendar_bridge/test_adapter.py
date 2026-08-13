@@ -126,5 +126,47 @@ eq("but carries the result", again["actual"], "2.25%")
 
 raises("titleless record", lambda: A.to_row({"date": "2026-08-14", "time": "12:30", "country": "United States"}))
 
+print("\n— against a real actor record —")
+# Verbatim from an actual run, keys and all. This is the contract; if the
+# actor changes shape these are the assertions that break.
+REAL_HOLIDAY = {
+    "id": "187", "date": "13/08/2026", "time": "All Day", "zone": "tunisia",
+    "currency": None, "importance": None, "event": "Tunisia - Women's Day",
+    "actual": None, "forecast": None, "previous": None,
+    "retrieved_at": "2026-08-13T16:43:37.701777", "data_type": "economic_calendar_event",
+}
+holiday = normalize(A.to_row(REAL_HOLIDAY), "apify")
+# "All Day" isn't a clock. Dropping these loses bank holidays, which are
+# exactly what explains a dead session.
+eq("all-day pins to midnight", holiday["event_at"], "2026-08-13T00:00:00+00:00")
+eq("holiday currency from zone", holiday["currency"], "TND")
+eq("holiday impact", holiday["impact"], "low")
+eq("holiday title", holiday["title"], "Tunisia - Women's Day")
+eq("tentative also all-day", A.resolve_event_at({"date": "13/08/2026", "time": "Tentative"}), "2026-08-13T00:00:00+00:00")
+
+REAL_EVENT = {
+    "id": "412", "date": "13/08/2026", "time": "06:00", "zone": "united kingdom",
+    "currency": "GBP", "importance": "medium", "event": "Business Investment (QoQ)  (Q2)",
+    "actual": None, "forecast": "0.5%", "previous": "-0.3%",
+}
+real = normalize(A.to_row(REAL_EVENT), "apify")
+eq("real event time", real["event_at"], "2026-08-13T06:00:00+00:00")
+eq("real event currency", real["currency"], "GBP")
+eq("real event impact", real["impact"], "medium")
+eq("real event id", real["external_id"], "412")
+
+# The one that would fail silently. This feed publishes DD/MM/YYYY, and slash
+# dates are ambiguous for the first twelve days of every month: read as MM/DD,
+# 08/09/2026 is the 8th of September rather than the 9th of August, and nothing
+# anywhere reports an error.
+eq("DD/MM, not MM/DD", A.resolve_event_at({"date": "08/09/2026", "time": "06:00"}), "2026-09-08T06:00:00+00:00")
+eq("unambiguous DD/MM agrees", A.resolve_event_at({"date": "13/08/2026", "time": "06:00"}), "2026-08-13T06:00:00+00:00")
+
+# An unmapped country must not become a three-letter pseudo-currency.
+raises("unmapped country isn't truncated", lambda: A.to_currency({"zone": "atlantis", "currency": None}))
+eq("zone is read as the country", A.to_currency({"zone": "japan", "currency": None}), "JPY")
+# Real releases carry their own currency; the zone is only the fallback.
+eq("currency wins over zone", A.to_currency({"zone": "euro zone", "currency": "EUR"}), "EUR")
+
 print("\n" + (f"{fails} FAILED" if fails else "All adapter assertions passed."))
 sys.exit(1 if fails else 0)
