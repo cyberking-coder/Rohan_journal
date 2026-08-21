@@ -55,16 +55,16 @@ cheap high-value work lands before the expensive infrastructure work.
 - ✅ Filterable analytics core accepting `{ period, tradeType }` — `src/lib/analytics.js`, covered by `npm test`.
 - ✅ `trades` schema superset — `supabase/phase0.sql`. Note: `fees` remains the commission column rather than adding a duplicate `commission` field, since every existing writer already uses it.
 
-### Phase 1 — Analysis module to full spec
+### Phase 1 — Analysis module to full spec ✅ **Done**
 *Goal: the single most detailed part of the PDF (§0–§12 of the Analysis dev spec).*
-- Filter bar: 6 period tabs (Today / 7D / 30D / 3M / 1Y / All) × 3 trade-type pills (All / Winners / Losers).
-- 4 stat cards: Total P&L, Win Rate, Profit Factor (+ qualitative label lookup), Expectancy.
-- Equity Curve with **Equity / Drawdown** toggle + the 8-metric strip beneath it.
-- Win/Loss Distribution, Long vs Short, Day-of-Week Performance, Top Symbols.
-- Session Performance: live 24h timeline with a "NOW" marker + 3 session cards (Asian 22–08, London 08–13, NY 13–22 UTC).
-- Trading Calendar heatmap with the 8th "Weekly" rollup column + clickable Day Detail panel.
-- "Your Stats" block: monthly best/worst/average + the ~30-metric two-column grid.
-- Fix the spec's noted bug: implement **Max Drawdown %** properly (`max_drawdown / peak_equity_before_drawdown × 100`), don't clone the live app's `0%`.
+- ✅ Filter bar: 6 period tabs (Today / 7D / 30D / 3M / 1Y / All) × 3 trade-type pills (All / Winners / Losers).
+- ✅ 4 stat cards: Total P&L, Win Rate, Profit Factor (+ qualitative label lookup), Expectancy.
+- ✅ Equity Curve with **Equity / Drawdown** toggle + the 8-metric strip beneath it.
+- ✅ Win/Loss Distribution, Long vs Short, Day-of-Week Performance, Top Symbols.
+- ✅ Session Performance: live 24h timeline with a "NOW" marker + 3 session cards (Asian 22–08, London 08–13, NY 13–22 UTC).
+- ✅ Trading Calendar heatmap with the 8th "Weekly" rollup column + clickable Day Detail panel.
+- ✅ "Your Stats" block: monthly best/worst/average + the ~30-metric two-column grid.
+- ✅ Fixed the spec's noted bug: implement **Max Drawdown %** properly (`max_drawdown / peak_equity_before_drawdown × 100`), don't clone the live app's `0%`. Shows a dash, not 0%, when equity never rose above its starting point — there is no peak to divide by.
 
 ### Phase 2 — Tools module ✅ **Done**
 *Goal: fully specified, stateless, fast wins.*

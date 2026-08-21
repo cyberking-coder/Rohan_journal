@@ -1,212 +1,182 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { PageHeader, Panel, RangeTabs } from '../components/common'
-import { StatCard } from '../components/widgets'
-import { SessionBars } from '../components/charts'
+import { PageHeader, Panel } from '../components/common'
+import Money from '../components/Money'
+import TradingCalendar from '../components/TradingCalendar'
+import StatGrid from '../components/StatGrid'
 import {
-  filterByRange, computeStats, bySession, byKey, fmtMoney, fmtPct,
-  buildInsights, biggestTrades, net, fmtRR, ratingOf,
-} from '../lib/stats'
+  ComparisonBars, DistributionChart, EquityDrawdown, MetricStrip, SessionTimeline,
+} from '../components/AnalysisCharts'
+import {
+  DEFAULT_PERIOD, DEFAULT_TRADE_TYPE, PERIODS, PERIOD_KEYS, TRADE_TYPES, TRADE_TYPE_KEYS,
+  byDayOfWeek, byDirection, bySession, bySymbol, computeAnalytics, filterTrades,
+  maxDrawdown, monthlyTotals, winLossDistribution,
+} from '../lib/analytics'
 
-export default function Analysis({ trades }) {
-  const [range, setRange] = useState('month')
-  const [strategy, setStrategy] = useState('All')
+export default function Analysis({ trades = [] }) {
+  const [period, setPeriod] = useState(DEFAULT_PERIOD)
+  const [tradeType, setTradeType] = useState(DEFAULT_TRADE_TYPE)
+  const [now, setNow] = useState(() => new Date())
 
-  const strategyOptions = useMemo(
-    () => ['All', ...Array.from(new Set(trades.map((t) => t.strategy).filter(Boolean)))],
-    [trades]
+  // The session timeline's NOW marker has to move, or it's a decoration that
+  // quietly becomes a lie. A minute is finer than the marker can show.
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60000)
+    return () => clearInterval(id)
+  }, [])
+
+  const scoped = useMemo(() => filterTrades(trades, { period, tradeType }), [trades, period, tradeType])
+  const a = useMemo(() => computeAnalytics(scoped, trades), [scoped, trades])
+
+  // Deliberately computed from the *period* filter only, ignoring the
+  // winners/losers pill. A curve drawn from winners alone rises forever and
+  // a drawdown chart of losers only falls — both are meaningless shapes.
+  const curveTrades = useMemo(
+    () => filterTrades(trades, { period, tradeType: 'all' }),
+    [trades, period],
   )
+  const curveStats = useMemo(() => computeAnalytics(curveTrades, trades), [curveTrades, trades])
+  const dd = useMemo(() => maxDrawdown(curveTrades), [curveTrades])
 
-  const scoped = useMemo(() => {
-    const inRange = filterByRange(trades, range)
-    return strategy === 'All' ? inRange : inRange.filter((t) => t.strategy === strategy)
-  }, [trades, range, strategy])
-  const s = useMemo(() => computeStats(scoped), [scoped])
   const sessions = useMemo(() => bySession(scoped), [scoped])
-  const byStrat = useMemo(() => byKey(scoped, 'strategy'), [scoped])
-  const bySymbol = useMemo(() => byKey(scoped, 'symbol'), [scoped])
-  const insights = useMemo(() => buildInsights(scoped), [scoped])
-  const { win, loss } = useMemo(() => biggestTrades(scoped), [scoped])
+  const directions = useMemo(() => byDirection(scoped), [scoped])
+  const weekdays = useMemo(() => byDayOfWeek(scoped), [scoped])
+  const symbols = useMemo(() => bySymbol(scoped), [scoped])
+  const distribution = useMemo(() => winLossDistribution(scoped), [scoped])
+  const months = useMemo(() => monthlyTotals(scoped), [scoped])
 
-  // rating distribution
-  // Ratings are 1-10; bucketed into five bands so the widget stays readable.
-  const ratingDist = useMemo(() => {
-    const bands = [[9, 10], [7, 8], [5, 6], [3, 4], [1, 2]]
-    const d = bands.map(([lo, hi]) => ({
-      rating: `${lo}–${hi}`,
-      count: scoped.filter((t) => {
-        const r = ratingOf(t)
-        return r != null && r >= lo && r <= hi
-      }).length,
-    }))
-    const max = Math.max(1, ...d.map((x) => x.count))
-    return d.map((x) => ({ ...x, pct: (x.count / max) * 100 }))
-  }, [scoped])
+  const pf = a.profitFactorLabel
+
+  const strip = [
+    { label: 'Trades', value: String(curveStats.tradeCount) },
+    { label: 'Net P&L', money: curveStats.totalPnl, colored: true },
+    { label: 'Best trade', money: curveStats.bestTrade, colored: true },
+    { label: 'Worst trade', money: curveStats.worstTrade, colored: true },
+    { label: 'Peak equity', money: dd.peak },
+    { label: 'Max DD', money: dd.amount, colored: true },
+    // A dash, not 0% — see the note in StatGrid; equity that never rose has no
+    // peak to measure a fall against.
+    { label: 'Max DD %', value: dd.pct === null ? '—' : `${dd.pct.toFixed(1)}%` },
+    { label: 'Avg / trade', money: curveStats.expectancy, colored: true },
+  ]
 
   return (
     <>
-      <PageHeader eyebrow="Deep Dive" title="Analysis">
-        <div className="page-controls" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select value={strategy} onChange={(e) => setStrategy(e.target.value)}
-            style={{ background: 'var(--card)', border: '1px solid var(--stroke)', color: 'var(--text)', borderRadius: 11, padding: '9px 12px', fontSize: 13, maxWidth: 230 }}>
-            {strategyOptions.map((o) => <option key={o} value={o}>{o === 'All' ? 'All strategies' : o}</option>)}
-          </select>
-          <RangeTabs value={range} onChange={setRange} />
+      <PageHeader eyebrow="Deep Dive" title="Analysis" />
+
+      {/* Filters */}
+      <div className="card" style={{ padding: 13, marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 4, background: 'var(--card-2)', borderRadius: 10, padding: 3, overflowX: 'auto' }}>
+          {PERIOD_KEYS.map((k) => (
+            <button key={k} onClick={() => setPeriod(k)}
+              style={{
+                flex: 1, padding: '7px 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap',
+                background: period === k ? 'var(--card-hover)' : 'transparent',
+                color: period === k ? 'var(--text)' : 'var(--text-3)',
+              }}>{PERIODS[k].label}</button>
+          ))}
         </div>
-      </PageHeader>
-      {strategy !== 'All' && (
-        <div style={{ marginBottom: 14, fontSize: 12.5, color: 'var(--text-3)' }}>
-          Filtered to <span style={{ color: 'var(--mint)' }}>{strategy}</span> · {scoped.length} trade{scoped.length === 1 ? '' : 's'}
+
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          {TRADE_TYPE_KEYS.map((k) => (
+            <button key={k} onClick={() => setTradeType(k)}
+              style={{
+                padding: '6px 13px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                border: `1px solid ${tradeType === k ? 'var(--mint)' : 'var(--stroke)'}`,
+                color: tradeType === k ? 'var(--mint)' : 'var(--text-3)',
+                background: tradeType === k ? 'rgba(47,212,138,0.09)' : 'transparent',
+              }}>{TRADE_TYPES[k].label}</button>
+          ))}
+          <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--text-3)' }}>
+            {scoped.length} of {trades.length} trades
+          </span>
         </div>
+      </div>
+
+      {trades.length === 0 ? (
+        <Empty />
+      ) : (
+        <>
+          {/* Headline */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 13, marginBottom: 16 }}>
+            <Headline label="Total P&L" delay={0.02} money={a.totalPnl} colored
+              sub={`${a.winCount}W / ${a.lossCount}L`} />
+            <Headline label="Win Rate" delay={0.05} value={`${a.winRate.toFixed(1)}%`}
+              sub={`${a.tradeCount} closed trade${a.tradeCount === 1 ? '' : 's'}`} />
+            <Headline label="Profit Factor" delay={0.08}
+              value={Number.isFinite(a.profitFactor) ? a.profitFactor.toFixed(2) : '∞'}
+              sub={pf.label}
+              subColor={pf.tone === 'good' ? 'var(--mint)' : pf.tone === 'bad' ? 'var(--red)' : 'var(--amber)'} />
+            <Headline label="Expectancy" delay={0.11} money={a.expectancy} colored sub="per trade" />
+          </div>
+
+          <Panel title="Equity Curve" delay={0.14} style={{ marginBottom: 14 }}
+            right={tradeType !== 'all' && (
+              <span style={{ fontSize: 10.5, color: 'var(--text-3)' }}>all trades — the pill filter doesn’t apply here</span>
+            )}>
+            <EquityDrawdown trades={curveTrades} />
+            <MetricStrip items={strip} />
+          </Panel>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14, marginBottom: 14 }}>
+            <Panel title="Win / Loss Distribution" delay={0.16}>
+              <DistributionChart buckets={distribution} />
+            </Panel>
+            <Panel title="Long vs Short" delay={0.18}>
+              <ComparisonBars rows={directions} emptyMessage="No trades carry a direction yet." />
+            </Panel>
+            <Panel title="Day of Week" delay={0.2}>
+              <ComparisonBars rows={weekdays} />
+            </Panel>
+            <Panel title="Top Symbols" delay={0.22}>
+              <ComparisonBars rows={symbols} labelKey="symbol" emptyMessage="No symbols in this period." />
+            </Panel>
+          </div>
+
+          <Panel title="Session Performance" delay={0.24} style={{ marginBottom: 14 }}
+            right={<span style={{ fontSize: 10.5, color: 'var(--text-3)' }}>UTC</span>}>
+            <SessionTimeline sessions={sessions} now={now} />
+          </Panel>
+
+          <Panel title="Trading Calendar" delay={0.26} style={{ marginBottom: 14 }}>
+            <TradingCalendar trades={scoped} />
+          </Panel>
+
+          <Panel title="Your Stats" delay={0.28}>
+            <StatGrid a={a} months={months} />
+          </Panel>
+        </>
       )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14, marginBottom: 16 }}>
-        <StatCard label="Net P&L" value={fmtMoney(s.netTotal)} accent={s.netTotal >= 0 ? 'var(--mint)' : 'var(--red)'} delay={0.02} />
-        <StatCard label="Win Rate" value={fmtPct(s.winRate)} delay={0.05} />
-        <StatCard label="Profit Factor" value={isFinite(s.profitFactor) ? s.profitFactor.toFixed(2) : '∞'} delay={0.08} />
-        <StatCard label="Avg R:R" value={fmtRR(s.avgRR)} delay={0.11} />
-        <StatCard label="Expectancy" value={fmtMoney(s.expectancy)} accent={s.expectancy >= 0 ? 'var(--mint)' : 'var(--red)'} delay={0.14} />
-      </div>
-
-      {/* Coaching insights */}
-      <Panel title="Coaching Insights" delay={0.16} right={<span style={{ fontSize: 12, color: 'var(--text-3)' }}>Generated from your trades</span>} style={{ marginBottom: 14 }}>
-        {insights.note ? (
-          <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-3)', fontSize: 13.5 }}>{insights.note}</div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-            <InsightColumn title="Keep doing" icon="✓" color="var(--mint)" items={insights.keep} empty="Build a positive edge to see what's working." />
-            <InsightColumn title="Do more of" icon="▲" color="var(--info)" items={insights.strengths} empty="No standout strengths yet." />
-            <InsightColumn title="Where to improve" icon="!" color="var(--amber)" items={insights.improvements} empty="Nothing is clearly hurting you — nice." />
-          </div>
-        )}
-      </Panel>
-
-      {/* Biggest win / loss */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }} className="grid-2">
-        <ExtremeTrade label="Biggest Win" trade={win} positive delay={0.2} />
-        <ExtremeTrade label="Biggest Loss" trade={loss} delay={0.24} />
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }} className="grid-2">
-        <Panel title="Session Performance" delay={0.18}>
-          {sessions.length ? <SessionBars data={sessions} /> : <Empty />}
-        </Panel>
-        <Panel title="Trade Rating Distribution" delay={0.22}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 4 }}>
-            {ratingDist.map((r, i) => (
-              <div key={r.rating} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div className="mono" style={{ width: 84, fontSize: 12, color: 'var(--text-2)' }}>{r.rating} / 10</div>
-                <div style={{ flex: 1, height: 12, background: 'var(--track)', borderRadius: 6, overflow: 'hidden' }}>
-                  <motion.div initial={{ width: 0 }} animate={{ width: `${r.pct}%` }} transition={{ delay: 0.3 + i * 0.06, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                    style={{ height: '100%', background: 'linear-gradient(90deg,#23b978,#3ee39a)', borderRadius: 6 }} />
-                </div>
-                <span className="mono" style={{ width: 28, textAlign: 'right', fontSize: 13, color: 'var(--text-2)' }}>{r.count}</span>
-              </div>
-            ))}
-          </div>
-        </Panel>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }} className="grid-2">
-        <Panel title="By Strategy" delay={0.26}><BreakdownTable rows={byStrat} /></Panel>
-        <Panel title="By Symbol" delay={0.3}><BreakdownTable rows={bySymbol} /></Panel>
-      </div>
-
-      <style>{`@media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr !important; } }`}</style>
     </>
   )
 }
 
-function BreakdownTable({ rows }) {
-  if (!rows.length) return <Empty />
+function Headline({ label, value, money, colored, sub, subColor, delay = 0 }) {
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-      <thead>
-        <tr>{['Name', 'Trades', 'Win %', 'Net P&L'].map((h) => (
-          <th key={h} style={{ textAlign: h === 'Name' ? 'left' : 'right', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', fontWeight: 600, padding: '0 8px 10px' }}>{h}</th>
-        ))}</tr>
-      </thead>
-      <tbody>
-        {rows.map((r, i) => (
-          <motion.tr key={r.name} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
-            style={{ borderTop: '1px solid var(--stroke-soft)' }}>
-            <td style={{ padding: '11px 8px', fontWeight: 500 }}>{r.name}</td>
-            <td style={{ padding: '11px 8px', textAlign: 'right', color: 'var(--text-2)', fontFamily: 'var(--mono)', fontSize: 13 }}>{r.count}</td>
-            <td style={{ padding: '11px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 13, color: r.winRate >= 50 ? 'var(--mint)' : 'var(--text-2)' }}>{r.winRate.toFixed(0)}%</td>
-            <td style={{ padding: '11px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, color: r.pnl >= 0 ? 'var(--mint)' : 'var(--red)' }}>{fmtMoney(r.pnl)}</td>
-          </motion.tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
-function renderBold(text) {
-  // turns **word** into a highlighted span
-  return text.split(/(\*\*[^*]+\*\*)/g).map((chunk, i) =>
-    chunk.startsWith('**') && chunk.endsWith('**')
-      ? <span key={i} style={{ color: 'var(--text)', fontWeight: 600 }}>{chunk.slice(2, -2)}</span>
-      : <span key={i}>{chunk}</span>
-  )
-}
-
-function InsightColumn({ title, icon, color, items, empty }) {
-  return (
-    <div style={{ background: 'var(--input-bg)', border: '1px solid var(--stroke)', borderRadius: 14, padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <span style={{
-          width: 22, height: 22, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 12, fontWeight: 700, color: '#04140d', background: color,
-        }}>{icon}</span>
-        <span style={{ fontSize: 12.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color }}>{title}</span>
+    <motion.div className="card"
+      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay }}
+      style={{ padding: '15px 17px' }}>
+      <div style={{ fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-3)' }}>{label}</div>
+      <div className="mono" style={{ fontSize: 25, fontWeight: 700, marginTop: 6, letterSpacing: '-0.02em' }}>
+        {/* Only money is masked. A win rate or a trade count gives away
+            nothing about account size, and blurring it while the same figures
+            sit unmasked in the breakdowns below just looks broken. */}
+        {money !== undefined ? <Money value={money} digits={2} colored={colored} /> : value}
       </div>
-      {items && items.length ? (
-        <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 11 }}>
-          {items.map((t, i) => (
-            <motion.li key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.06 }}
-              style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--text-2)', display: 'flex', gap: 8 }}>
-              <span style={{ color, marginTop: 1 }}>•</span>
-              <span>{renderBold(t)}</span>
-            </motion.li>
-          ))}
-        </ul>
-      ) : (
-        <div style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{empty}</div>
-      )}
-    </div>
-  )
-}
-
-function ExtremeTrade({ label, trade, positive, delay }) {
-  const color = positive ? 'var(--mint)' : 'var(--red)'
-  return (
-    <Panel title={label} delay={delay}>
-      {trade ? (
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 30, fontWeight: 700, color, letterSpacing: '-0.02em' }}>
-            {fmtMoney(net(trade))}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 13, color: 'var(--text-2)' }}>
-            <span><b style={{ color: 'var(--text)', fontFamily: 'var(--mono)' }}>{trade.symbol}</b> · {trade.side}</span>
-            <span>{trade.strategy}</span>
-            <span style={{ color: 'var(--text-3)' }}>{trade.session} · {new Date(trade.traded_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-          </div>
-          {trade.screenshot_url && (
-            <a href={trade.screenshot_url} target="_blank" rel="noreferrer" style={{ marginLeft: 'auto' }}>
-              <img src={trade.screenshot_url} alt="chart" referrerPolicy="no-referrer"
-                style={{ width: 88, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--stroke)' }} />
-            </a>
-          )}
-        </div>
-      ) : (
-        <div style={{ padding: '18px 0', color: 'var(--text-3)', fontSize: 13 }}>
-          No {positive ? 'winning' : 'losing'} trades in this range.
-        </div>
-      )}
-    </Panel>
+      {sub && <div style={{ fontSize: 11, color: subColor || 'var(--text-3)', marginTop: 4 }}>{sub}</div>}
+    </motion.div>
   )
 }
 
 function Empty() {
-  return <div style={{ padding: '30px 0', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>No trades in this range</div>
+  return (
+    <div className="card" style={{ padding: 40, textAlign: 'center' }}>
+      <div style={{ fontSize: 30, marginBottom: 10 }}>◑</div>
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>Nothing to analyse yet</div>
+      <div style={{ fontSize: 13, color: 'var(--text-3)', maxWidth: 420, margin: '0 auto', lineHeight: 1.6 }}>
+        Log a few trades and this page fills in — equity curve, session breakdown,
+        a calendar of every trading day, and the full stats block.
+      </div>
+    </div>
+  )
 }

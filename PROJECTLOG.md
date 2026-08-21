@@ -12,7 +12,7 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 0 | Foundation: routing, shell/nav, top bar, schema superset, filterable stats core | ✅ Done |
-| 1 | Analysis module to full spec (filters, 9 widgets, ~30-metric stats block) | ⏸ Not started |
+| 1 | Analysis module to full spec (filters, 9 widgets, ~30-metric stats block) | ✅ Done |
 | 2 | Tools: Position Size Calculator, Forex Market Hours, tool shell | ✅ Done |
 | 3 | Journal split-pane + Trades page to spec | ✅ Done |
 | 4 | Dashboard widgets + Settings tabs & preferences | ✅ Done |
@@ -42,12 +42,67 @@ These block or shape later phases. None block Phases 0–4.
    Recommendation: stay on Supabase Auth. Awaiting confirmation.
 4. **Scope of Community and Billing** — both add permanent operational and moderation
    burden. Confirm whether this stays a personal journal or becomes a multi-tenant SaaS.
-5. **Analysis account scoping** — the live app appears to show all accounts' trades on the
-   Analysis page regardless of the active account. Decide: all-accounts or active-account.
+5. **Analysis account scoping** — still open. Phase 1 shipped showing **all accounts**,
+   matching the live app's apparent behaviour. Scoping it to the active account is a
+   one-line change (`filterByAccount` from phase 5) if you'd rather it followed the
+   Trades page's switcher.
 
 ---
 
 ## Entries
+
+### 2026-08-13 — Phase 1: the Analysis module
+
+The largest remaining piece, and the one the whole app points at. Most of the
+risk was already retired: `analytics.js` has been computing and testing these
+figures since phase 0, so this was widgets over tested maths rather than new
+logic.
+
+**Built**
+- Filter bar: 6 periods × 3 trade-type pills, driving every widget from one
+  place.
+- Equity Curve with an Equity/Drawdown toggle and the 8-figure strip beneath.
+- Win/Loss distribution, Long vs Short, Day of Week, Top Symbols.
+- Session Performance: a 24h UTC timeline with a live NOW marker and three
+  session cards.
+- Trading Calendar: month heatmap, the spec's eighth Weekly rollup column, and
+  a click-through day detail panel listing that day's trades.
+- "Your Stats": best/worst/average month plus the ~35-metric two-column grid.
+- New breakdowns in `analytics.js` (sessions, direction, day-of-week, symbols,
+  distribution, calendar) with 60 assertions in `test/breakdowns.test.mjs`.
+
+**Decisions worth recording**
+- **The equity curve ignores the winners/losers pill.** A curve drawn from
+  winners alone rises forever and a drawdown chart of losers only falls — both
+  are meaningless shapes. The panel says so when the pill is set.
+- **The calendar's month navigation is independent of the period filter.**
+  They mean different things; tying them together makes "Last 7 days" render
+  an almost empty grid.
+- **Streamer Mode masks money only.** Win rates, trade counts and Max DD % stay
+  readable — they give away nothing about account size, and blurring them while
+  identical figures sat unmasked in the breakdowns just looked broken.
+- **Padding days in the calendar show no P&L.** The weekly rollup deliberately
+  counts only the current month's days, so showing the neighbours' figures made
+  boundary weeks visibly fail to add up.
+- **Max Drawdown % shows a dash, not 0%**, when equity never rose above its
+  start. That's the spec's noted bug, and this is the fix.
+
+**Found in the browser, not in review**
+- Bar labels laid over the bars became unreadable exactly on the longest bars —
+  the rows that matter most. Each figure now has its own column.
+- Eight full distribution ranges ("-$393…-$294") collided into a smear; the
+  axis carries the lower edge and the tooltip carries the range.
+- Square calendar cells across eight columns were ~130px tall on a wide screen.
+- On mobile the card silently **cropped** the Weekly column rather than
+  overflowing, so the page reported no overflow while the column was simply
+  unreachable. The grid now scrolls inside its own container.
+
+**Verified**
+- 390 assertions passing; clean build.
+- Browser passes at 1400px and 390px, in both themes, with Streamer Mode on and
+  off. No `$` survives in any SVG text with Streamer Mode enabled.
+
+---
 
 ### 2026-08-13 — Calendar feed: Apify / Investing.com adapter
 
