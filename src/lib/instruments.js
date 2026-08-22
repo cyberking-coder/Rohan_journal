@@ -1,3 +1,5 @@
+import { canonical } from './symbols.js'
+import { KNOWN_SYMBOLS } from './pips.js'
 // Contract size = how many units of the underlying one standard (1.0) lot controls.
 // P&L = priceMove × lots × contractSize.
 //
@@ -35,7 +37,11 @@ const RULES = [
 const FX_CODES = /^(AUD|CAD|CHF|EUR|GBP|JPY|NZD|USD|SGD|HKD|MXN|ZAR|NOK|SEK|TRY)/i
 
 export function contractSizeFor(symbol = '') {
-  const s = String(symbol).toUpperCase().replace(/[^A-Z0-9]/g, '')
+  // Canonicalised first. "EURUSD.pro" strips to nine characters, fails the
+  // six-character currency-pair test below, and used to fall through to a
+  // contract size of 1 — making P&L computed from prices 100,000 times too
+  // small on any suffixed forex symbol, which is most prop-firm accounts.
+  const s = canonical(symbol, KNOWN_SYMBOLS) || String(symbol).toUpperCase().replace(/[^A-Z0-9]/g, '')
   for (const r of RULES) if (r.test.test(s)) return r.size
   if (s.length === 6 && FX_CODES.test(s.slice(0, 3)) && FX_CODES.test(s.slice(3))) return 100000
   return 1

@@ -1,3 +1,4 @@
+import { canonical } from './symbols.js'
 // Pip configuration for the Position Size Calculator.
 //
 // Kept separate from `instruments.js` (which is about contract sizes for P&L
@@ -73,8 +74,26 @@ export const DEFAULT_INSTRUMENT = 'XAUUSD'
 
 const BY_SYMBOL = new Map(INSTRUMENTS.map((i) => [i.symbol, i]))
 
+// The set of names this app knows. Passed to `canonical` so that stripping a
+// suffix stops the moment it produces something real, rather than continuing
+// until it has eaten a genuine symbol.
+export const KNOWN_SYMBOLS = new Set(INSTRUMENTS.map((i) => i.symbol))
+
+/**
+ * Look up an instrument by any name a broker might use for it.
+ *
+ * Before this went through `canonical`, "XAUUSD.s" found nothing and every
+ * caller fell back to the default forex pip size of 0.0001 — for an instrument
+ * whose pip is 0.1. Position sizes, pip values and modelled spreads on that
+ * symbol were all wrong by a factor of a thousand, with nothing on screen to
+ * suggest it. Prop-firm accounts, which suffix everything, were the ones
+ * affected.
+ */
 export function getInstrument(symbol) {
-  return BY_SYMBOL.get(symbol) || null
+  const direct = BY_SYMBOL.get(symbol)
+  if (direct) return direct
+  const c = canonical(symbol, KNOWN_SYMBOLS)
+  return (c && BY_SYMBOL.get(c)) || null
 }
 
 // Grouped for the dropdown's <optgroup>s.

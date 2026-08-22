@@ -7,6 +7,8 @@
 // Dashboard/Analysis pages still use.
 
 import { net } from './stats.js'
+import { canonical } from './symbols.js'
+import { KNOWN_SYMBOLS } from './pips.js'
 import {
   DEFAULT_SESSION_CONFIG, inWindow, minuteOfDay, resolveSessions, sessionAt,
 } from './sessionConfig.js'
@@ -433,7 +435,12 @@ export function byDayOfWeek(trades) {
 export function bySymbol(trades, limit = 8) {
   const map = new Map()
   for (const t of trades) {
-    const key = (t.symbol || 'Unknown').toUpperCase()
+    // Canonicalised, so a trader running the same pair at two prop firms sees
+    // one row rather than "EURUSD.pro" and "EURUSD.m" competing for space in
+    // their top-symbols chart.
+    const key = t.symbol
+      ? (canonical(t.symbol, KNOWN_SYMBOLS) || t.symbol.toUpperCase())
+      : 'UNKNOWN'
     if (!map.has(key)) map.set(key, [])
     map.get(key).push(t)
   }

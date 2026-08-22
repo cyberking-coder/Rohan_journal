@@ -47,8 +47,10 @@ than the PRD asks · **missing** = nothing in the repo.
    BOS/CHOCH, premium/discount, and HTF bias from closed candles only. The
    §60 look-ahead rule is verified structurally by the test suite rather than
    asserted in a comment.
-7. **§34–40 Market-data architecture** — 1-minute canonical bars, Parquet, R2,
-   a provider abstraction, an `instruments` table and symbol mapping.
+7. **§34–40 Market-data architecture** — symbol mapping *now built*, see
+   `src/lib/symbols.js`. The rest (1-minute canonical bars, Parquet, R2, a
+   provider abstraction) is storage infrastructure and needs a vendor
+   decision, not code.
 8. **§83 privacy (export + delete)** — *now built, see `src/lib/privacy.js`.*
    Full export, plus scoped deletions for trades, journal, backtests and the
    whole account.
