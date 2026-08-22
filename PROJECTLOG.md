@@ -53,6 +53,49 @@ These block or shape later phases. None block Phases 0–4.
 
 ## Entries
 
+### 2026-08-13 — Security & multi-tenancy audit
+
+Full write-up in `docs/SECURITY.md`. Reproduce with
+`./supabase/run_security_test.sh` — it builds a throwaway PostgreSQL, applies
+every migration, then acts as two signed-in users and an anonymous visitor,
+asserting 38 things about what each can see and change.
+
+**One high-severity finding**
+The `screenshots` bucket was public, and its read policy carried no role
+restriction — so it applied to `anon` too. The anon key is in the app's JS
+bundle by design, which means anyone could list the bucket and download every
+user's screenshots, no filename guessing required. The original comment called
+them "non-sensitive chart images"; they aren't — a chart screenshot usually has
+the terminal in frame, showing balance, equity and open positions. Bucket is
+now private, owner-only, with signed URLs for display.
+
+**One medium finding**
+`generate-report` capped the number of trades but not their size, and the
+browser's own 200-character note trimming is not something a server may trust.
+The prompt input is now rebuilt server-side with hard caps: a hostile 134 MB
+payload becomes 368 KB — 33.5M tokens down to 94K, about $168 of input tokens
+per request avoided.
+
+**A finding that wasn't**
+Four `for update` policies have `using` without `with check`, which reads like
+it would let a user reassign their row to another user_id. It doesn't —
+PostgreSQL uses `USING` as `WITH CHECK` when the latter is absent. Asserted
+directly rather than believed, and written down because the next person to read
+that SQL will think the same thing.
+
+**On the method**
+The suite is verified to catch breakage, not just to pass: weakening the
+`candles` read policy to `using (true)` produces three failures including
+`anon: no candles — saw 2`. It also runs as a non-owner role, because RLS
+doesn't apply to the table owner and an audit run as owner passes no matter how
+broken the policies are.
+
+**Not code defects, but required before taking payment** — account deletion
+(GDPR), Supabase auth dashboard settings, a *tested* backup restore, security
+headers, and error monitoring. Listed in `docs/SECURITY.md`.
+
+---
+
 ### 2026-08-13 — Per-user auth, and a backtester that needs no file
 
 Two changes that turned out to belong together: the bridge had to authenticate

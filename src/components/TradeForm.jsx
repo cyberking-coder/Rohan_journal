@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import RatingSlider from './RatingSlider'
-import { uploadScreenshot } from '../lib/storage'
+import { screenshotSrc, uploadScreenshot } from '../lib/storage'
 import { contractSizeFor, computePnl, ASSET_GROUPS, STRATEGIES } from '../lib/instruments'
 import { parseRR, fmtRR, ratingOf } from '../lib/stats'
 
@@ -128,7 +128,11 @@ export default function TradeForm({ open, onClose, onSubmit, userId, initial = n
       setCsTouched(false)
       setCustomSym(!ASSET_GROUPS.some((g) => g.items.includes(initial.symbol)))
       setFile(null)
-      setPreview(initial.screenshot_url || null)
+      // The stored value is a storage path, not a URL — the bucket is private,
+      // so displaying it needs a short-lived signed link. Legacy rows holding
+      // a full URL pass straight through.
+      setPreview(null)
+      screenshotSrc(initial.screenshot_url).then((src) => setPreview(src))
       setErr(null)
     } else {
       resetAll()
