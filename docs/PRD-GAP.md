@@ -49,8 +49,11 @@ than the PRD asks · **missing** = nothing in the repo.
    asserted in a comment.
 7. **§34–40 Market-data architecture** — 1-minute canonical bars, Parquet, R2,
    a provider abstraction, an `instruments` table and symbol mapping.
-8. **§71 Worker/queue system**, **§84 billing**, **§86 admin**, **§83 privacy
-   (export + delete)** — all needed before selling, none needed to use the app.
+8. **§83 privacy (export + delete)** — *now built, see `src/lib/privacy.js`.*
+   Full export, plus scoped deletions for trades, journal, backtests and the
+   whole account.
+9. **§71 Worker/queue system**, **§84 billing**, **§86 admin** — needed before
+   selling, not needed to use the app.
 9. **cTrader** — not started.
 
 ## Three decisions the PRD forces, which are yours and not mine

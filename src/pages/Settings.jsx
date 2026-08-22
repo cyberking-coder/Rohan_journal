@@ -13,6 +13,7 @@ import {
 } from '../lib/format'
 import { fmtPct } from '../lib/stats'
 import SessionEditor from '../components/SessionEditor'
+import PrivacyPanel from '../components/PrivacyPanel'
 
 const TABS = [
   { key: 'profile', label: 'Profile' },
@@ -270,6 +271,11 @@ function PreferencesTab({ trades, onClearAll }) {
             <button onClick={p.restoreNotifications} style={ghost}>Restore all</button>
           </Row>
         )}
+      </Section>
+
+      <Section title="Your Data"
+        subtitle="Export everything, or delete it. Required by law where this is sold, and the right thing regardless.">
+        <PrivacyPanel />
       </Section>
 
       <Section title="Danger Zone" danger>
