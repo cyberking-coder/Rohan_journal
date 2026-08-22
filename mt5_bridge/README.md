@@ -32,6 +32,72 @@ same row the open one created and flips it from open to closed.
 > curve, account balances — is computed from closed trades only. Floating P&L
 > is shown separately, never mixed in.
 
+## How the bridge signs in
+
+Set `SUPABASE_ANON_KEY`, `JOURNAL_EMAIL` and `JOURNAL_PASSWORD` in `.env`. The
+bridge logs into your journal account and Supabase's row-level security then
+confines it to your own rows — the same protection the web app relies on. Your
+user id comes from the login, so there's nothing to copy by hand.
+
+The older `SUPABASE_SERVICE_KEY` + `JOURNAL_USER_ID` path still works for a
+single-user setup, and the bridge warns when it's used. **Never hand a service
+key to another person running this**: it bypasses row-level security, so its
+holder can read and modify every user's trades, not just their own.
+
+## Exporting candles for the Backtesting page
+
+The same terminal connection can pull price history, so the replay runs on your
+broker's real prices with no data vendor and no quota.
+
+**Straight into the journal** (recommended) — no file, and the Backtesting page
+can then switch timeframe mid-replay:
+
+```bat
+python export_candles.py --symbol XAUUSD --timeframes M5,M15,H1,H4 --days 365 --upload
+```
+
+Run `supabase/phase8.sql` first (re-run it if you applied an earlier version —
+it's idempotent and now adds the `candles` table). Re-running the export for an
+overlapping range updates those bars rather than duplicating them, so it's safe
+on a schedule.
+
+**Or to a file**, if you'd rather not store anything:
+
+```bat
+python export_candles.py --symbol XAUUSD --timeframe H1 --days 365
+python export_candles.py --list gold        # what does this broker call it?
+```
+
+That writes `XAUUSD_H1.csv`; load it with **Choose a file** on the Backtesting
+page. One timeframe per file — several at once needs `--upload`.
+
+### How much to upload
+
+A year of H1 is about 6,000 bars per symbol and costs nothing. A year of M1 is
+about 375,000, which is slow to query and will eat a free-tier database; the
+uploader says so before writing that much. M5 and up is the comfortable range
+for anything you'd actually sit and replay.
+
+**On timezones.** MT5 stamps every bar in *server* time, and most brokers run
+theirs on UTC+2/+3. The exporter measures the offset from a live tick and
+converts to real UTC. A replay would look identical either way, which is
+exactly why this matters — the error would never show itself, but your candles
+would sit a couple of hours away from your own trade times and from the
+journal's session analysis.
+
+If the market is closed the last tick is stale and the offset can't be read.
+The script says so and writes server time unchanged; re-run during market
+hours, or pass `--server-offset 3` if you know it.
+
+**If you get no bars**, the terminal hasn't downloaded that history. Open the
+chart for that symbol and timeframe, scroll back as far as you want, then
+re-run. For very long spans also raise Tools → Options → Charts → *Max bars in
+chart*.
+
+Prop-firm and ECN accounts often suffix their symbols (`XAUUSD.s`,
+`GBPJPY-ECN`); `--symbol XAUUSD` finds those automatically, and `--list` shows
+everything available.
+
 ## Read-only access (recommended)
 
 The bridge only ever reads. You can make that structural rather than a promise

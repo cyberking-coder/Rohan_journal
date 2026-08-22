@@ -29,8 +29,13 @@ const WEEKLY_QUOTA = 3
 const MAX_TRADES = 200
 const DAY = 86400000
 
+// Set ALLOWED_ORIGIN to your app's URL in production. '*' is fine while the
+// only caller is you — the function requires a bearer token regardless, so
+// this is defence in depth rather than the lock itself.
+const ORIGIN = Deno.env.get('ALLOWED_ORIGIN') || '*'
+
 const CORS = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': ORIGIN,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
@@ -99,6 +104,51 @@ Rules:
 - If the sample is small or the journal is mostly empty, say so plainly and scale your confidence down rather than over-reading noise.
 - No disclaimers, no "consult a financial advisor", no filler. The trader asked for a read on their own trading.`
 
+// Caps chosen to be generous for a real journal entry and useless for abuse.
+const MAX_NOTE = 400
+const MAX_FIELD = 60
+
+const str = (v: unknown, max: number) =>
+  typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null
+
+const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0)
+
+/** Rebuilds the prompt input from known fields only, each length-capped. */
+function sanitise(input: any) {
+  return {
+    count: num(input.count),
+    netPnl: num(input.netPnl),
+    winRate: num(input.winRate),
+    wins: num(input.wins),
+    losses: num(input.losses),
+    avgWin: num(input.avgWin),
+    avgLoss: num(input.avgLoss),
+    largestWin: num(input.largestWin),
+    largestLoss: num(input.largestLoss),
+    journaledCount: num(input.journaledCount),
+    periodStart: str(input.periodStart, 40),
+    periodEnd: str(input.periodEnd, 40),
+    symbols: (Array.isArray(input.symbols) ? input.symbols : []).slice(0, 20).map((s: any) => ({
+      symbol: str(s?.symbol, 20),
+      trades: num(s?.trades),
+      net: num(s?.net),
+      wins: num(s?.wins),
+    })),
+    trades: input.trades.slice(-MAX_TRADES).map((t: any) => ({
+      date: str(t?.date, 12),
+      symbol: str(t?.symbol, 20),
+      direction: str(t?.direction, MAX_FIELD),
+      pnl: num(t?.pnl),
+      rating: t?.rating == null ? null : num(t.rating),
+      setup: str(t?.setup, MAX_NOTE),
+      mistakes: str(t?.mistakes, MAX_NOTE),
+      lessons: str(t?.lessons, MAX_NOTE),
+      emotions: str(t?.emotions, MAX_FIELD * 2),
+      notes: str(t?.notes, MAX_NOTE),
+    })),
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
@@ -160,9 +210,12 @@ Deno.serve(async (req: Request) => {
   if (summary.trades.length < 5) {
     return json({ error: 'Not enough trades to review.' }, 400)
   }
-  // A caller could post an arbitrarily large body; cap what actually reaches
-  // the model so one request can't run up an unbounded bill.
-  summary.trades = summary.trades.slice(-MAX_TRADES)
+  // The client trims its own notes, but the client is not to be trusted with
+  // anything that decides cost. Without this, 200 trades each carrying a
+  // megabyte of text is a valid request, and every one of those bytes is
+  // billed as input tokens. Rebuilt field by field, with hard caps, so
+  // whatever else is in the body simply doesn't reach the model.
+  const clean = sanitise(summary)
 
   const anthropic = new Anthropic({ apiKey })
 
@@ -180,7 +233,7 @@ Deno.serve(async (req: Request) => {
       },
       messages: [{
         role: 'user',
-        content: `Here is my closed trade history and journal. Write my performance review.\n\n${JSON.stringify(summary)}`,
+        content: `Here is my closed trade history and journal. Write my performance review.\n\n${JSON.stringify(clean)}`,
       }],
     })
   } catch (err) {
@@ -213,9 +266,9 @@ Deno.serve(async (req: Request) => {
       title: String(report.title || 'Performance review').slice(0, 120),
       summary: String(report.summary || ''),
       sections: report.sections || [],
-      period_start: summary.periodStart || null,
-      period_end: summary.periodEnd || null,
-      trade_count: summary.trades.length,
+      period_start: clean.periodStart || null,
+      period_end: clean.periodEnd || null,
+      trade_count: clean.trades.length,
       model: message.model || MODEL,
       input_tokens: message.usage?.input_tokens ?? null,
       output_tokens: message.usage?.output_tokens ?? null,

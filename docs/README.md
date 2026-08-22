@@ -126,6 +126,8 @@ is off" still needs a host.
 ### Phase 8 — Backtesting ✅ **Done**
 - ✅ `backtest_sessions` table. Candles are deliberately **not** stored — bulk price data is slow through Postgres and market-data licences generally forbid redistributing it. `supabase/phase8.sql`.
 - ✅ Candle import from CSV / TSV / JSON, handling MetaTrader's tab-separated `<DATE>`+`<TIME>` split, TradingView's ISO export, headerless files and bare arrays. **No vendor needed** — the platform you already use exports this.
+- ✅ `mt5_bridge/export_candles.py` — pulls history straight from the connected MT5 terminal, converting the broker's server clock to real UTC. Your broker's own prices, no vendor, no quota.
+- ✅ `--upload` writes into a per-user `candles` table, so the page needs **no file**: pick a symbol, pick a timeframe, replay. Switching timeframe keeps your place in time and preserves the session.
 - ✅ Candle-replay UI: hand-drawn SVG chart, play/pause, five speeds, single-step, and a scrub bar that re-runs the simulation from scratch so state is always a pure function of the candles seen.
 - ✅ Simulated orders with SL/TP, live floating P&L, and on-chart level lines.
 - ✅ Results scored by `computeAnalytics` — the same engine as the Analysis page, not a second implementation that would eventually disagree.

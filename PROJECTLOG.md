@@ -53,6 +53,165 @@ These block or shape later phases. None block Phases 0–4.
 
 ## Entries
 
+### 2026-08-13 — Security & multi-tenancy audit
+
+Full write-up in `docs/SECURITY.md`. Reproduce with
+`./supabase/run_security_test.sh` — it builds a throwaway PostgreSQL, applies
+every migration, then acts as two signed-in users and an anonymous visitor,
+asserting 38 things about what each can see and change.
+
+**One high-severity finding**
+The `screenshots` bucket was public, and its read policy carried no role
+restriction — so it applied to `anon` too. The anon key is in the app's JS
+bundle by design, which means anyone could list the bucket and download every
+user's screenshots, no filename guessing required. The original comment called
+them "non-sensitive chart images"; they aren't — a chart screenshot usually has
+the terminal in frame, showing balance, equity and open positions. Bucket is
+now private, owner-only, with signed URLs for display.
+
+**One medium finding**
+`generate-report` capped the number of trades but not their size, and the
+browser's own 200-character note trimming is not something a server may trust.
+The prompt input is now rebuilt server-side with hard caps: a hostile 134 MB
+payload becomes 368 KB — 33.5M tokens down to 94K, about $168 of input tokens
+per request avoided.
+
+**A finding that wasn't**
+Four `for update` policies have `using` without `with check`, which reads like
+it would let a user reassign their row to another user_id. It doesn't —
+PostgreSQL uses `USING` as `WITH CHECK` when the latter is absent. Asserted
+directly rather than believed, and written down because the next person to read
+that SQL will think the same thing.
+
+**On the method**
+The suite is verified to catch breakage, not just to pass: weakening the
+`candles` read policy to `using (true)` produces three failures including
+`anon: no candles — saw 2`. It also runs as a non-owner role, because RLS
+doesn't apply to the table owner and an audit run as owner passes no matter how
+broken the policies are.
+
+**Not code defects, but required before taking payment** — account deletion
+(GDPR), Supabase auth dashboard settings, a *tested* backup restore, security
+headers, and error monitoring. Listed in `docs/SECURITY.md`.
+
+---
+
+### 2026-08-13 — Per-user auth, and a backtester that needs no file
+
+Two changes that turned out to belong together: the bridge had to authenticate
+as the user before it could sensibly write candles on their behalf.
+
+**Per-user auth (`mt5_bridge/journal_auth.py`)**
+The bridge connected with the SERVICE key, which bypasses row-level security.
+Fine when one person owns the database; unacceptable the moment a second
+person runs it, because that key can read and modify *every* user's trades.
+It now signs in with the journal email and password using the public anon key,
+so RLS confines it to that user's own rows — the same protection the web app
+relies on. The user id comes from the login rather than being copied by hand.
+The service-key path still works for a single-user setup and warns loudly.
+
+**Candles in the journal**
+`supabase/phase8.sql` now has a `candles` table, and `export_candles.py
+--timeframes M5,M15,H1,H4 --upload` pushes several sets in one run. The
+Backtesting page reads them directly: pick a symbol, pick a timeframe, replay.
+No file at all.
+
+This reverses the "candles are not stored" decision in that file's own header,
+and the header now says why. One of its two reasons doesn't survive contact
+with what this actually does: redistribution means serving price data to *other
+people*, and these rows are per-user and RLS-scoped — your broker's candles,
+readable only by you. The other reason (bulk data is slow) still stands and
+shapes the design, so the uploader warns before writing M1-scale history.
+
+**Switching timeframe keeps your place in TIME**
+The same instant is a different index in a different series, so jumping by
+index would silently move you weeks. Orders carry absolute timestamps, the
+cursor maps through `indexAtOrBefore`, and the session continues at the new
+resolution — where a finer timeframe genuinely resolves fills the coarser one
+could only guess at.
+
+**A bug this exposed and fixed**
+Replay state is now derived from the *actions* the trader took plus the
+candles, rather than accumulated incrementally. That fixed a live bug:
+scrubbing rebuilt state from fills alone, so any trade the user had closed by
+hand simply vanished on rewind.
+
+**And one I introduced, found by measuring**
+Switching to a symbol with fewer bars left the cursor past the end — 509 of
+200 — because the reset effect early-returned once it had seen the series key,
+and the key changes a render *before* the shorter candle array arrives. The
+cursor is now clamped on every length change.
+
+**Verified**
+- 493 JS assertions, 62 Python ones, clean build.
+- `phase8.sql` run three times against PostgreSQL 16; re-uploading a bar
+  updates it in place rather than duplicating.
+- Browser: manual close survives a scrub; H1 → M15 holds the same moment
+  (Jun 6 07:00) while the cursor moves 128/400 → 509/1600 with the position
+  intact; a symbol switch clamps and clears correctly.
+
+---
+
+### 2026-08-13 — MT5 candle exporter
+
+Answers "where do I get real candles" with: the terminal you already have
+connected. `mt5_bridge/export_candles.py` pulls OHLC history via
+`copy_rates_range` and writes a CSV the Backtesting page reads directly — your
+broker's own prices, no vendor, no quota, and it works under the read-only
+investor login since price history is market data rather than account data.
+
+**The trap it exists to handle**
+MT5 stamps every bar in *server* time, and most brokers run theirs on UTC+2/+3.
+Treating those numbers as UTC shifts the whole file by a couple of hours. A
+replay looks identical either way — same shape, same fills — which is precisely
+why it matters: the error never announces itself, but the candles end up hours
+away from your own trade times and from the journal's session analysis.
+
+The offset is measured from a live tick and removed. When the market is closed
+the last tick is stale and the difference is the tick's age rather than a
+timezone, so it **refuses to guess** and says so, rather than shifting an entire
+history file by a wrong amount. `--server-offset` is there for that case.
+
+Also handles prop-firm symbol suffixes (`XAUUSD.s`, `GBPJPY-ECN`) — an
+exact-match lookup would fail on exactly the accounts most likely to use this.
+
+**Verified**
+- 30 assertions in `mt5_bridge/test_export.py` against a stubbed terminal,
+  weighted toward the offset logic and the weekend-refusal case.
+- Round trip: 300 synthetic bars on a UTC+3 server exported, then parsed by the
+  app's own `parseCandles` — 300 in, 300 out, no skips, H1 detected, and the
+  midnight-server bar correctly landing at 00:00 UTC.
+- Loaded in the browser on the Backtesting page: 120/300 window, H1, no
+  warnings.
+
+---
+
+### 2026-08-13 — Fix: the MT5 upsert key was a partial index
+
+First real run of the bridge against a live FundingPips account failed on
+every trade write with `42P10: there is no unique or exclusion constraint
+matching the ON CONFLICT specification`.
+
+`mt5.sql` created `trades_user_external_uniq` with `where external_id is not
+null`. Postgres cannot infer a *partial* index for `ON CONFLICT`, so the
+upsert had no key to conflict on. This is the identical mistake found in
+`phase6.sql` during the calendar work — same reasoning, same failure, and it
+had been sitting in `mt5.sql` since well before this project started. It only
+surfaced now because nobody had actually run the bridge.
+
+The WHERE clause bought nothing: Postgres treats NULLs as distinct, so
+manually-entered trades (which have no `external_id`) coexist happily under a
+plain unique index.
+
+Verified against PostgreSQL 16, including the upgrade path — an install
+carrying the old partial index is fixed by re-running `mt5.sql` — and the
+transition the bridge depends on: an open position upserted, then closed,
+lands on one row rather than two.
+
+**Action required:** re-run `supabase/mt5.sql`.
+
+---
+
 ### 2026-08-13 — Investor-login sync: open positions and account balance
 
 Closes the last non-vendor gap in phase 5. Prompted by the observation that an

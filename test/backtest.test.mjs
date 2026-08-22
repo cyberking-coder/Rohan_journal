@@ -1,6 +1,7 @@
 import {
-  ambiguityReport, closePosition, detectTimeframe, floatingPnl, openPosition,
-  parseCandles, positionPnl, resolveExit, step, toTradeRows, validateOrder,
+  ambiguityReport, closePosition, detectTimeframe, floatingPnl, indexAtOrBefore,
+  openPosition, parseCandles, positionPnl, replay, resolveExit, step,
+  toTradeRows, validateOrder,
 } from '../src/lib/backtest.js'
 import { computeAnalytics } from '../src/lib/analytics.js'
 
@@ -189,6 +190,66 @@ eq('as a percentage', report.pct, 50)
 eq('swing to the optimistic reading', report.swing, 2500)
 eq('no ambiguity, no swing', ambiguityReport([{ ...closed[1], ambiguous: false }]).swing, 0)
 eq('empty is safe', ambiguityReport([]).pct, 0)
+
+console.log('\n— deterministic replay from actions —')
+// Ten H1 bars drifting up, with one dip on bar 4 deep enough to hit a stop.
+const H1 = Array.from({ length: 10 }, (_, i) => bar(1000 + i * 3600000, 1.10 + i * 0.001, 1.10 + i * 0.001 + 0.0008, 1.10 + i * 0.001 - 0.0008, 1.10 + i * 0.001 + 0.0005))
+H1[4] = bar(H1[4].t, H1[4].o, H1[4].o + 0.0005, 1.0980, 1.0985)
+
+const openAt0 = { type: 'open', at: H1[0].t, order: { symbol: 'EURUSD', side: 'Long', lots: 1, stopLoss: 1.0990, takeProfit: 1.2 } }
+
+const full = replay(H1, [openAt0])
+eq('the stop is found', full.closed.length, 1)
+eq('filled at the stop', full.closed[0].exit, 1.099)
+eq('nothing left open', full.open.length, 0)
+
+// Rewinding must reproduce the state at that point, not the final one.
+const early = replay(H1, [openAt0], 2)
+eq('before the stop, still open', early.open.length, 1)
+eq('and nothing closed yet', early.closed.length, 0)
+
+// The bug this replaces: rebuilding from fills alone silently dropped trades
+// the trader closed by hand — the position just vanished on a scrub.
+const manual = replay(H1, [
+  { type: 'open', at: H1[0].t, order: { symbol: 'EURUSD', side: 'Long', lots: 1 } },
+  { type: 'close', at: H1[2].t, id: null },
+])
+// The close action needs the id the open produced; without it nothing closes,
+// which is why the page threads the real id through.
+eq('an unmatched close is ignored', manual.open.length, 1)
+
+const openedId = replay(H1, [{ type: 'open', at: H1[0].t, order: { symbol: 'EURUSD', side: 'Long', lots: 1 } }], 0).open[0].id
+const withManual = replay(H1, [
+  { type: 'open', at: H1[0].t, order: { symbol: 'EURUSD', side: 'Long', lots: 1 } },
+  { type: 'close', at: H1[2].t, id: openedId },
+])
+eq('manual close survives a replay', withManual.closed.length, 1)
+eq('closed by hand', withManual.closed[0].reason, 'manual')
+eq('and is not still open', withManual.open.length, 0)
+// Replaying twice gives the same answer, which is what makes scrubbing safe.
+eq('replay is deterministic', JSON.stringify(replay(H1, [openAt0])), JSON.stringify(replay(H1, [openAt0])))
+
+// An action is applied at the close of the bar containing it, so an order
+// placed mid-bar on a coarser series still lands on that bar.
+const midBar = replay(H1, [{ ...openAt0, at: H1[0].t + 60000 }], 1)
+eq('mid-bar action lands on the next bar', midBar.open.length, 1)
+eq('and enters at that bar close', midBar.open[0].entry, H1[1].c)
+
+console.log('\n— keeping your place across timeframes —')
+eq('exact match', indexAtOrBefore(H1, H1[3].t), 3)
+// The whole point: the same moment is a different index in a different series,
+// so jumping by index would move you months.
+eq('between bars rounds back', indexAtOrBefore(H1, H1[3].t + 1000), 3)
+eq('before the start clamps', indexAtOrBefore(H1, 0), 0)
+eq('after the end clamps', indexAtOrBefore(H1, H1[9].t + 99999999), 9)
+eq('empty series', indexAtOrBefore([], 1000), -1)
+eq('single bar', indexAtOrBefore([H1[0]], H1[0].t + 500), 0)
+
+// A four-times-finer series covering the same span: the same instant must
+// resolve to the same moment, not the same index.
+const M15 = Array.from({ length: 40 }, (_, i) => bar(1000 + i * 900000, 1.1, 1.101, 1.099, 1.1))
+eq('H1 bar 3 is M15 bar 12', indexAtOrBefore(M15, H1[3].t), 12)
+eq('same moment, different index', M15[indexAtOrBefore(M15, H1[3].t)].t, H1[3].t)
 
 console.log(fails ? `\n${fails} FAILED` : '\nAll backtest assertions passed.')
 process.exit(fails ? 1 : 0)

@@ -8,14 +8,14 @@ was applied, just run it again.
 | --- | --- | --- | --- |
 | 1 | `schema.sql` | Creates `public.trades` with Row Level Security. | Yes — everything else builds on it. |
 | 2 | `storage.sql` | Storage bucket + policies for trade screenshots. | Only if you attach chart images. |
-| 3 | `mt5.sql` | Columns the MT5 bridge writes (`external_id`, `source`, `swap`, `stop_loss`, `take_profit`). | Only if you use `mt5_bridge/`. |
+| 3 | `mt5.sql` | Columns the MT5 bridge writes, plus the unique key its upserts need. | Only if you use `mt5_bridge/`. **Re-run it** if you applied a version before Aug 2026 — see below. |
 | 4 | `phase0.sql` | Trade schema superset: `status`, `opened_at`/`closed_at`, `broker_account_id`, generated `is_deletable`, indexes. | Yes |
 | 5 | `phase3.sql` | Structured journal fields, planned R:R, 1–10 `journal_rating`, generated `is_journaled`. | Yes, for the Journal |
 | 6 | `phase4.sql` | `profiles` table — preferences that follow you across devices. | Optional; preferences work from localStorage without it. |
 | 7 | `phase5.sql` | `broker_accounts` table and the foreign key from `trades`. | Optional; the app falls back to source-derived accounts. |
 | 8 | `phase6.sql` | `economic_events` — the shared economic calendar, read-only from the browser. | Optional; the Market page says so if it's absent. |
 | 9 | `phase7.sql` | `ai_reports` — the AI report archive and its weekly quota bucket. | Optional; the AI Report page says so if it's absent. |
-| 10 | `phase8.sql` | `backtest_sessions` — saved candle-replay sessions. Candles themselves are never stored. | Optional; replay works without saving. |
+| 10 | `phase8.sql` | `backtest_sessions` and the per-user `candles` table the Backtesting page replays from. | Optional; replay also works from a file. **Re-run it** if you applied it before the candles table existed. |
 
 `enable-auth.sql` and `migrate-numeric.sql` are one-off fixes from earlier in
 the project's life. Only run them if the file's own comments describe a problem
@@ -31,6 +31,12 @@ script should no longer stop it. If one does fail:
 - **`relation "trades" does not exist`** — start with `schema.sql`.
 - **`must be owner of table`** — you're running as the wrong role. Use the SQL
   editor in the Supabase dashboard rather than a client connected as `anon`.
+- **`42P10: there is no unique or exclusion constraint matching the ON CONFLICT
+  specification`** — re-run `mt5.sql`. Earlier versions created
+  `trades_user_external_uniq` as a *partial* index (`where external_id is not
+  null`), and Postgres cannot infer a partial index for `ON CONFLICT`, so every
+  sync from `mt5_bridge/` failed. The current script drops and recreates it
+  without the WHERE clause.
 
 ## What the app does without them
 
