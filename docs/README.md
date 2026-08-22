@@ -120,10 +120,13 @@ they already logged into, and no password is transmitted or stored anywhere.
 - ✅ The prompt is given the journal notes, not just P&L — a review written from numbers alone just restates the dashboard.
 - ⚠️ **Requires an Anthropic API key** set as a function secret. Without it the page explains the two setup steps rather than offering a button that can't work. This is a cost decision for whoever runs the app, not a code gap.
 
-### Phase 8 — Backtesting
-- Session CRUD + empty state.
-- Historical OHLC source, candle-replay UI, simulated orders with SL/TP.
-- Reuse the Phase 1 analytics engine to score results.
+### Phase 8 — Backtesting ✅ **Done**
+- ✅ `backtest_sessions` table. Candles are deliberately **not** stored — bulk price data is slow through Postgres and market-data licences generally forbid redistributing it. `supabase/phase8.sql`.
+- ✅ Candle import from CSV / TSV / JSON, handling MetaTrader's tab-separated `<DATE>`+`<TIME>` split, TradingView's ISO export, headerless files and bare arrays. **No vendor needed** — the platform you already use exports this.
+- ✅ Candle-replay UI: hand-drawn SVG chart, play/pause, five speeds, single-step, and a scrub bar that re-runs the simulation from scratch so state is always a pure function of the candles seen.
+- ✅ Simulated orders with SL/TP, live floating P&L, and on-chart level lines.
+- ✅ Results scored by `computeAnalytics` — the same engine as the Analysis page, not a second implementation that would eventually disagree.
+- ✅ **Ambiguous fills are surfaced, not hidden.** When one candle contains both the stop and the target, OHLC cannot say which came first. Those resolve to the *stop* (pessimistic) and the results panel reports how many there were and what the optimistic reading would have changed the result by.
 
 ### Phase 9 — Trader POV & sharing
 - `shared_dashboards` table: `{ id, owner_user_id, code, account_scope, sections_enabled[], created_at, expires_at, revoked }`.

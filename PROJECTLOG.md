@@ -19,7 +19,7 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 | 5 | Broker accounts & auto-sync | 🟡 Done except credential-based cloud sync (vendor-gated) |
 | 6 | Economic Calendar (Market) | ✅ Done — feed chosen (Apify / Investing.com) |
 | 7 | AI Report generation + weekly quota | ✅ Done — needs an Anthropic API key to run |
-| 8 | Backtesting (candle replay) | ⏸ Not started |
+| 8 | Backtesting (candle replay) | ✅ Done |
 | 9 | Trader POV / shared read-only dashboards | ⏸ Not started |
 | 10 | Community (lounges, leaderboard, affiliate) | ⏸ Not started — scope not confirmed |
 | 11 | Billing (Stripe tiers) & Security tab | ⏸ Not started — scope not confirmed |
@@ -50,6 +50,59 @@ These block or shape later phases. None block Phases 0–4.
 ---
 
 ## Entries
+
+### 2026-08-13 — Phase 8: backtesting
+
+Listed as gated on "a historical OHLC source". It wasn't: MetaTrader,
+TradingView and most brokers export candle history as CSV, so the whole phase
+is buildable with no vendor at all.
+
+**Built**
+- `parseCandles` — CSV, TSV and JSON, including MetaTrader's tab-separated
+  `<DATE>`+`<TIME>` split, TradingView's ISO export, headerless files and bare
+  `[t,o,h,l,c,v]` arrays. Sorts, de-duplicates and rejects corrupt bars.
+- The simulation engine: order validation, fills, gaps, floating P&L.
+- `CandleChart` — hand-drawn SVG. Recharts has no candlestick primitive and
+  faking one from stacked bars fights the library the whole way.
+- Replay UI: play/pause, five speeds, single-step, scrub.
+- `backtest_sessions` table. Candles are **not** stored — bulk price data is
+  slow through Postgres, and redistributing licensed market data is the one
+  thing those agreements exist to prevent.
+
+**The decision the whole thing rests on**
+When a candle contains both the stop and the target, OHLC data cannot say
+which was touched first — that lives in ticks the file doesn't carry.
+Assuming the target is how a backtester flatters itself: every ambiguous bar
+becomes a win and a losing strategy reads as profitable. So ambiguity resolves
+to the **stop**, and the results panel says how many fills were decided that
+way and what the optimistic reading would have changed the result by. A
+strategy that only works if you assume the good outcome isn't a strategy.
+
+Gaps are the exception and are not ambiguous: if a candle opens beyond a
+level, that level filled at the open, because price was never at the level.
+
+**Bugs found by testing, not by reading**
+- The dot-to-dash rewrite for MetaTrader dates (`2026.08.13`) also ate the
+  decimal point in ISO milliseconds (`09:00:00.000Z` → `09:00:00-000Z`),
+  silently discarding every candle from an ordinary ISO export. Now only the
+  date portion is rewritten.
+- `date` and `time` both mapped to one key, so MetaTrader's second column
+  overwrote the first and every candle in a day collapsed onto midnight.
+- The chart's geometry memo didn't list the measured width as a dependency, so
+  after the ResizeObserver fired the candles were still drawn to the
+  pre-measurement 1000px — running to x=925 inside a 306-wide viewBox on a
+  phone. Found by measuring the DOM rather than looking at the screenshot.
+
+**Verified**
+- 464 assertions passing; clean build.
+- End-to-end browser run on a generated 400-candle MetaTrader file: parsed,
+  H1 detected, order placed, stepped, filled at the stop for exactly -$15.00
+  (0.1 lots x 100,000 x 0.0015).
+- The ambiguity path exercised with a purpose-built file: resolved to the stop
+  and reported the $400 swing.
+- Both themes, 1400px and 390px, no horizontal overflow.
+
+---
 
 ### 2026-08-13 — Phase 1: the Analysis module
 
