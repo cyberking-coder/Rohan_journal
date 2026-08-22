@@ -9,15 +9,49 @@ editable.
 > **Windows only.** MetaTrader's `MetaTrader5` Python package requires the
 > Windows terminal to be installed and running.
 
-## What gets imported per trade
+## What gets imported
 
-symbol · side (long/short) · entry & exit price · lots · gross P&L ·
+**Closed trades** — symbol · side · entry & exit price · lots · gross P&L ·
 commission + swap (as fees) · stop-loss / take-profit · **R:R** (auto from
-SL/TP) · session (from close time) · close time · **strategy** (auto-mapped
-from the order's magic number / comment — see below).
+SL/TP) · session (from close time) · open & close time · **strategy**
+(auto-mapped from the order's magic number / comment — see below).
 
-Trades are de-duplicated by MT5 **position ticket**, so re-running never creates
-duplicates.
+**Open positions** (unless `SYNC_OPEN=false`) — the same fields, plus the live
+mark and floating P&L, stored with `status='open'`.
+
+**Account state** — balance, equity and leverage, snapshotted onto the account
+row each sync. Needs `../supabase/phase5.sql` (re-run it if you applied an
+earlier version; the script is idempotent).
+
+Everything is keyed on the MT5 **position ticket**, so re-running never creates
+duplicates — and when a position closes, the closed-trade write lands on the
+same row the open one created and flips it from open to closed.
+
+> **On floating P&L.** An open position's profit hasn't landed and can still
+> reverse, so every total in the app — P&L, win rate, profit factor, the equity
+> curve, account balances — is computed from closed trades only. Floating P&L
+> is shown separately, never mixed in.
+
+## Read-only access (recommended)
+
+The bridge only ever reads. You can make that structural rather than a promise
+by logging in with your **investor password**:
+
+```
+MT5_LOGIN=1234567
+MT5_PASSWORD=your-investor-password
+MT5_SERVER=FundingPips-Live
+```
+
+MT5 treats an investor login as view-only at the broker — it can read balance,
+positions and history but cannot place, modify or close an order. Even if this
+script were compromised or simply wrong, it could not trade your account.
+
+On startup the bridge prints which kind of credential it's using, so you can
+confirm it says `investor (read-only)`.
+
+FundingPips and most prop firms list the investor password next to the master
+one in the account dashboard.
 
 ## One-time setup
 

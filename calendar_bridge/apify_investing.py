@@ -295,7 +295,7 @@ def to_row(raw):
     }
 
 
-def fetch(days=14, dump=False):
+def fetch(days=14, dump=False, dataset_id=None):
     """Run the actor and return raw dicts for import_events.normalize().
 
     `days` is accepted for interface compatibility but the actor windows its
@@ -314,6 +314,17 @@ def fetch(days=14, dump=False):
         raise SystemExit("pip install apify-client")
 
     client = ApifyClient(token)
+
+    # Reading an existing run's dataset instead of starting a new one. Actor
+    # runs cost compute; re-reading what one already produced does not. Useful
+    # when a run succeeded but the write afterwards failed, and when the
+    # account's monthly allowance is spent.
+    if dataset_id:
+        resolved = resolve_dataset(client, dataset_id)
+        items = list(client.dataset(resolved).iterate_items())
+        print(f"Read {len(items)} item(s) from dataset {resolved} (no actor run)")
+        return map_items(items, dump)
+
     run_input = {
         # The actor's own window selector. 'time_only' returns the current
         # calendar view; see the README for why `days` doesn't drive this.
@@ -333,7 +344,38 @@ def fetch(days=14, dump=False):
 
     items = list(client.dataset(dataset_id).iterate_items())
     print(f"Apify run {run_id} returned {len(items)} item(s)")
+    print(f"  (re-read later without spending another run: --dataset {dataset_id})")
+    return map_items(items, dump)
 
+
+def resolve_dataset(client, ident):
+    """Accept either a run id or a dataset id.
+
+    They look identical — both are 17-character opaque strings — but they are
+    not interchangeable, and the run id is the one printed in the console and
+    in this script's own output, so it's the one people reach for. Rather than
+    make that a documentation problem, a run id is looked up and its default
+    dataset used.
+    """
+    try:
+        info = client.run(ident).get()
+    except Exception:
+        # Not a run (or not readable) — treat it as a dataset id, which is the
+        # other legitimate thing it can be.
+        return ident
+
+    if info is None:
+        return ident
+    found = (getattr(info, "default_dataset_id", None)
+             or (info.get("defaultDatasetId") if isinstance(info, dict) else None))
+    if found:
+        print(f"Run {ident} → dataset {found}")
+        return found
+    return ident
+
+
+def map_items(items, dump=False):
+    """Raw dataset items → the loose dicts `normalize()` accepts."""
     if dump:
         import json
         print("\n--- first raw item, verbatim ---")

@@ -25,7 +25,26 @@ export function net(t) {
   return (Number(t.pnl) || 0) - (Number(t.fees) || 0)
 }
 
+/**
+ * An open position carries *floating* P&L in `pnl` — money that hasn't landed
+ * and can still turn around.
+ *
+ * Every aggregate below filters through this. Counting a floating figure as
+ * realised inflates the headline P&L, the win rate, the profit factor and the
+ * equity curve all at once, and does it silently — the number just looks
+ * better than it is. The filter lives inside each aggregate rather than at the
+ * call sites so a new caller can't forget it.
+ */
+export function isOpen(t) {
+  return t?.status === 'open'
+}
+
+export function realised(trades) {
+  return trades.filter((t) => !isOpen(t))
+}
+
 export function computeStats(trades) {
+  trades = realised(trades)
   const n = trades.length
   const wins = trades.filter((t) => net(t) > 0)
   const losses = trades.filter((t) => net(t) < 0)
@@ -55,6 +74,7 @@ export function computeStats(trades) {
 }
 
 export function equityCurve(trades) {
+  trades = realised(trades)
   const sorted = [...trades].sort((a, b) => new Date(a.traded_at) - new Date(b.traded_at))
   let gross = 0, netAcc = 0
   return sorted.map((t, i) => {
@@ -71,6 +91,7 @@ export function equityCurve(trades) {
 
 // last N days daily P&L for bar chart
 export function dailyPnl(trades, days = 30) {
+  trades = realised(trades)
   const map = new Map()
   for (let d = days - 1; d >= 0; d--) {
     const dt = new Date()
@@ -90,6 +111,7 @@ export function dailyPnl(trades, days = 30) {
 
 // calendar heatmap grouped by day for the given number of days
 export function calendarData(trades, days = 133) {
+  trades = realised(trades)
   const map = new Map()
   trades.forEach((t) => {
     const key = new Date(t.traded_at).toISOString().slice(0, 10)
@@ -112,6 +134,7 @@ export function calendarData(trades, days = 133) {
 }
 
 export function bySession(trades) {
+  trades = realised(trades)
   const map = new Map()
   trades.forEach((t) => {
     const k = t.session || 'Unknown'
@@ -127,6 +150,7 @@ export function bySession(trades) {
 }
 
 export function byKey(trades, key) {
+  trades = realised(trades)
   const map = new Map()
   trades.forEach((t) => {
     const k = t[key] || 'Unknown'
@@ -144,6 +168,7 @@ export function byKey(trades, key) {
 const DOW_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 export function byDayOfWeek(trades) {
+  trades = realised(trades)
   const map = new Map()
   trades.forEach((t) => {
     const d = new Date(t.traded_at).getDay()
@@ -159,6 +184,7 @@ export function byDayOfWeek(trades) {
 }
 
 export function biggestTrades(trades) {
+  trades = realised(trades)
   if (!trades.length) return { win: null, loss: null }
   let win = trades[0], loss = trades[0]
   trades.forEach((t) => {
@@ -171,6 +197,7 @@ export function biggestTrades(trades) {
 // Turns the numbers into plain-language coaching: what's working,
 // where to improve, and what to keep doing.
 export function buildInsights(trades) {
+  trades = realised(trades)
   const out = { strengths: [], improvements: [], keep: [], note: null }
   if (trades.length < 4) {
     out.note = 'Log a few more trades in this range to unlock coaching insights.'

@@ -53,8 +53,7 @@ export const VIEWS = [
     key: 'backtesting',
     label: 'Backtesting',
     icon: '⧗',
-    ready: false,
-    phase: 8,
+    ready: true,
     description: 'Replay historical candles and test a strategy.',
   },
   {

@@ -40,6 +40,30 @@ at 06:00 UTC (the ONS's 07:00 London slot) and NZ ones at 03:00 UTC (RBNZ's
 15:00 NZST), so the default `UTC` is correct. If you ever see everything off by
 a whole number of hours, this is the setting.
 
+### Re-reading a run without spending another one
+
+Actor runs consume your Apify compute allowance; re-reading a dataset a run
+already produced does not. Every run prints its dataset id, so:
+
+```bash
+python import_events.py --provider apify --dataset <run-id-or-dataset-id>
+```
+
+Either id works — run ids and dataset ids look identical (17 opaque
+characters) but aren't interchangeable, so a run id is looked up and its
+default dataset used.
+
+Use it when a run succeeded but the write afterwards failed, and when the
+account's monthly allowance is spent (`ForbiddenError: Monthly usage hard limit
+exceeded` — that's the account, not this code).
+
+If the API refuses even that, export the dataset from the Apify console as
+JSON and use the file path, which needs no API at all:
+
+```bash
+python import_events.py --file dataset.json --source apify
+```
+
 ### When the actor changes shape
 
 It scrapes a website, so its field names can change without notice. The
@@ -65,7 +89,7 @@ via `timeFilter`; `--days` only exists for adapters that accept a range.
 python test_adapter.py
 ```
 
-67 assertions, weighted heavily toward the timestamp handling — a scraped feed
+65 assertions, weighted heavily toward the timestamp handling — a scraped feed
 read in the wrong timezone, or with its dates read in the wrong order, looks
 completely fine and is completely wrong. Several run against a verbatim record
 from a real actor run, so they break if the feed changes shape.
@@ -75,6 +99,12 @@ Two things worth knowing about this feed:
 - **Dates are `DD/MM/YYYY`.** Slash dates are ambiguous for the first twelve
   days of every month, and a wrong reading doesn't error — it files releases in
   the wrong month. Pinned and asserted.
+- **The feed repeats rows, and reuses its `id` across different releases.**
+  A single `ON CONFLICT` statement can't touch the same row twice — Postgres
+  raises `21000` and the whole import fails — so rows are deduplicated before
+  the write. Identical repeats collapse (the later one wins, so a published
+  figure isn't wiped back to blank); an id covering two genuinely different
+  releases keeps both, keyed on the release itself rather than dropping one.
 - **Holidays arrive with `time: "All Day"` and no currency.** They're kept
   (pinned to midnight, currency derived from the country) rather than dropped —
   a bank holiday is exactly what explains a dead session. That's why

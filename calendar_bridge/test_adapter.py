@@ -168,5 +168,44 @@ eq("zone is read as the country", A.to_currency({"zone": "japan", "currency": No
 # Real releases carry their own currency; the zone is only the fallback.
 eq("currency wins over zone", A.to_currency({"zone": "euro zone", "currency": "EUR"}), "EUR")
 
+print("\n— dedupe before the upsert —")
+# Postgres raises 21000 ("cannot affect row a second time") if one ON CONFLICT
+# statement touches the same row twice, which fails the whole import. This
+# feed both repeats rows and reuses its `id` across different releases.
+from import_events import dedupe
+
+
+def ev(ext, at, title, actual=None):
+    return normalize({"event_at": at, "currency": "USD", "title": title,
+                      "actual": actual, "external_id": ext}, "apify")
+
+
+same_a = ev("9", "2026-08-13T06:00:00Z", "CPI")
+same_b = ev("9", "2026-08-13T06:00:00Z", "CPI", "3.2%")
+collapsed = dedupe([same_a, same_b])
+eq("identical rows collapse", len(collapsed), 1)
+# The later row is the one with the published figure — it has to win, or a
+# re-import late in the day would wipe the result back to blank.
+eq("later row wins", collapsed[0]["actual"], "3.2%")
+
+diff_a = ev("187", "2026-08-13T06:00:00Z", "CPI")
+diff_b = ev("187", "2026-08-13T09:00:00Z", "GDP")
+both = dedupe([diff_a, diff_b])
+eq("one id, two releases keeps both", len(both), 2)
+eq("titles both survive", sorted(r["title"] for r in both), ["CPI", "GDP"])
+
+# The bug this ordering guards against: if a colliding key's fate were decided
+# as rows arrived, whichever release came first would keep the bare id and the
+# other would be suffixed — so a feed returning them the other way round next
+# time would write a second copy of both, forever.
+eq("order-independent keys",
+   sorted(r["external_id"] for r in dedupe([diff_a, diff_b])),
+   sorted(r["external_id"] for r in dedupe([diff_b, diff_a])))
+
+eq("second pass changes nothing", dedupe(dedupe([diff_a, diff_b])), dedupe([diff_a, diff_b]))
+eq("distinct rows keep their order",
+   [r["title"] for r in dedupe([ev("1", "2026-08-13T06:00:00Z", "A"), ev("2", "2026-08-13T07:00:00Z", "B")])],
+   ["A", "B"])
+
 print("\n" + (f"{fails} FAILED" if fails else "All adapter assertions passed."))
 sys.exit(1 if fails else 0)

@@ -55,16 +55,16 @@ cheap high-value work lands before the expensive infrastructure work.
 - ✅ Filterable analytics core accepting `{ period, tradeType }` — `src/lib/analytics.js`, covered by `npm test`.
 - ✅ `trades` schema superset — `supabase/phase0.sql`. Note: `fees` remains the commission column rather than adding a duplicate `commission` field, since every existing writer already uses it.
 
-### Phase 1 — Analysis module to full spec
+### Phase 1 — Analysis module to full spec ✅ **Done**
 *Goal: the single most detailed part of the PDF (§0–§12 of the Analysis dev spec).*
-- Filter bar: 6 period tabs (Today / 7D / 30D / 3M / 1Y / All) × 3 trade-type pills (All / Winners / Losers).
-- 4 stat cards: Total P&L, Win Rate, Profit Factor (+ qualitative label lookup), Expectancy.
-- Equity Curve with **Equity / Drawdown** toggle + the 8-metric strip beneath it.
-- Win/Loss Distribution, Long vs Short, Day-of-Week Performance, Top Symbols.
-- Session Performance: live 24h timeline with a "NOW" marker + 3 session cards (Asian 22–08, London 08–13, NY 13–22 UTC).
-- Trading Calendar heatmap with the 8th "Weekly" rollup column + clickable Day Detail panel.
-- "Your Stats" block: monthly best/worst/average + the ~30-metric two-column grid.
-- Fix the spec's noted bug: implement **Max Drawdown %** properly (`max_drawdown / peak_equity_before_drawdown × 100`), don't clone the live app's `0%`.
+- ✅ Filter bar: 6 period tabs (Today / 7D / 30D / 3M / 1Y / All) × 3 trade-type pills (All / Winners / Losers).
+- ✅ 4 stat cards: Total P&L, Win Rate, Profit Factor (+ qualitative label lookup), Expectancy.
+- ✅ Equity Curve with **Equity / Drawdown** toggle + the 8-metric strip beneath it.
+- ✅ Win/Loss Distribution, Long vs Short, Day-of-Week Performance, Top Symbols.
+- ✅ Session Performance: live 24h timeline with a "NOW" marker + 3 session cards (Asian 22–08, London 08–13, NY 13–22 UTC).
+- ✅ Trading Calendar heatmap with the 8th "Weekly" rollup column + clickable Day Detail panel.
+- ✅ "Your Stats" block: monthly best/worst/average + the ~30-metric two-column grid.
+- ✅ Fixed the spec's noted bug: implement **Max Drawdown %** properly (`max_drawdown / peak_equity_before_drawdown × 100`), don't clone the live app's `0%`. Shows a dash, not 0%, when equity never rose above its starting point — there is no peak to divide by.
 
 ### Phase 2 — Tools module ✅ **Done**
 *Goal: fully specified, stateless, fast wins.*
@@ -100,8 +100,11 @@ laptop can read too. Storing live broker credentials there turns a journal into 
 way to lose an account. Doing it safely needs a server the browser cannot read
 from — an Edge Function or hosted bridge holding the secret, written once and
 never returned — which is exactly the vendor decision still open. Until then,
-sync runs from `mt5_bridge/` on the user's own machine, attached to a terminal
-they already logged into, and no password is transmitted or stored anywhere.
+sync runs from `mt5_bridge/` on the user's own machine using the broker's
+**investor** password — read-only at the broker, so the bridge can see the
+account but cannot trade it — and nothing is stored in the database. Open
+positions and account balance sync too; only "keeps running while your machine
+is off" still needs a host.
 
 ### Phase 6 — Economic Calendar (Market) ✅ **Done**
 - ✅ `economic_events` table, read-only from the browser by design — a client that could write here could feed every user false economic data. `supabase/phase6.sql`.
@@ -120,10 +123,13 @@ they already logged into, and no password is transmitted or stored anywhere.
 - ✅ The prompt is given the journal notes, not just P&L — a review written from numbers alone just restates the dashboard.
 - ⚠️ **Requires an Anthropic API key** set as a function secret. Without it the page explains the two setup steps rather than offering a button that can't work. This is a cost decision for whoever runs the app, not a code gap.
 
-### Phase 8 — Backtesting
-- Session CRUD + empty state.
-- Historical OHLC source, candle-replay UI, simulated orders with SL/TP.
-- Reuse the Phase 1 analytics engine to score results.
+### Phase 8 — Backtesting ✅ **Done**
+- ✅ `backtest_sessions` table. Candles are deliberately **not** stored — bulk price data is slow through Postgres and market-data licences generally forbid redistributing it. `supabase/phase8.sql`.
+- ✅ Candle import from CSV / TSV / JSON, handling MetaTrader's tab-separated `<DATE>`+`<TIME>` split, TradingView's ISO export, headerless files and bare arrays. **No vendor needed** — the platform you already use exports this.
+- ✅ Candle-replay UI: hand-drawn SVG chart, play/pause, five speeds, single-step, and a scrub bar that re-runs the simulation from scratch so state is always a pure function of the candles seen.
+- ✅ Simulated orders with SL/TP, live floating P&L, and on-chart level lines.
+- ✅ Results scored by `computeAnalytics` — the same engine as the Analysis page, not a second implementation that would eventually disagree.
+- ✅ **Ambiguous fills are surfaced, not hidden.** When one candle contains both the stop and the target, OHLC cannot say which came first. Those resolve to the *stop* (pessimistic) and the results panel reports how many there were and what the optimistic reading would have changed the result by.
 
 ### Phase 9 — Trader POV & sharing
 - `shared_dashboards` table: `{ id, owner_user_id, code, account_scope, sections_enabled[], created_at, expires_at, revoked }`.

@@ -323,3 +323,197 @@ export function fmtDuration(minutes) {
   const m = total % 60
   return m ? `${h}h ${m}m` : `${h}h`
 }
+
+// ---------------------------------------------------------------------------
+// Breakdowns
+// ---------------------------------------------------------------------------
+
+// Non-overlapping UTC sessions covering all 24 hours, so every trade lands in
+// exactly one bucket. Deliberately different from `sessions.js`'s four
+// overlapping city sessions — see the note at the top of that file.
+export const TRADING_SESSIONS = [
+  { id: 'asian', label: 'Asian', start: 22, end: 8, tint: 'var(--info)' },
+  { id: 'london', label: 'London', start: 8, end: 13, tint: 'var(--mint)' },
+  { id: 'newyork', label: 'New York', start: 13, end: 22, tint: 'var(--amber)' },
+]
+
+/** Which session a trade closed in, or null when it carries no usable time. */
+export function sessionOf(trade) {
+  const at = closeTime(trade)
+  if (at === null) return null
+  const hour = new Date(at).getUTCHours()
+  return TRADING_SESSIONS.find((s) => (
+    s.start < s.end ? hour >= s.start && hour < s.end : hour >= s.start || hour < s.end
+  ))?.id ?? null
+}
+
+/** Aggregate stats for one bag of trades — the shape every breakdown returns. */
+function group(trades) {
+  const wins = trades.filter((t) => net(t) > 0)
+  const losses = trades.filter((t) => net(t) < 0)
+  const pnl = trades.reduce((s, t) => s + net(t), 0)
+  const grossLoss = losses.reduce((s, t) => s + net(t), 0)
+  return {
+    count: trades.length,
+    pnl,
+    wins: wins.length,
+    losses: losses.length,
+    winRate: trades.length ? (wins.length / trades.length) * 100 : 0,
+    avg: trades.length ? pnl / trades.length : 0,
+    profitFactor: grossLoss !== 0
+      ? wins.reduce((s, t) => s + net(t), 0) / Math.abs(grossLoss)
+      : wins.length ? Infinity : 0,
+  }
+}
+
+export function bySession(trades) {
+  return TRADING_SESSIONS.map((s) => ({
+    ...s,
+    ...group(trades.filter((t) => sessionOf(t) === s.id)),
+  }))
+}
+
+// The schema writes `side` as 'Long'/'Short'; the MT5 bridge and some imports
+// use `direction` as 'buy'/'sell'. Both mean the same thing, so both are read
+// rather than making one of them silently vanish from this breakdown.
+export function directionOf(trade) {
+  const raw = String(trade.side || trade.direction || '').trim().toLowerCase()
+  if (raw === 'long' || raw === 'buy') return 'long'
+  if (raw === 'short' || raw === 'sell') return 'short'
+  return null
+}
+
+export function byDirection(trades) {
+  return [
+    { id: 'long', label: 'Long', ...group(trades.filter((t) => directionOf(t) === 'long')) },
+    { id: 'short', label: 'Short', ...group(trades.filter((t) => directionOf(t) === 'short')) },
+  ]
+}
+
+// Monday-first, matching the calendar heatmap and the Monday-based week used
+// everywhere else in the app.
+export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+export function byDayOfWeek(trades) {
+  const buckets = WEEKDAYS.map((label) => ({ label, trades: [] }))
+  for (const t of trades) {
+    const at = closeTime(t)
+    if (at === null) continue
+    // getDay: Sunday 0 … Saturday 6 → Monday 0 … Sunday 6.
+    buckets[(new Date(at).getDay() + 6) % 7].trades.push(t)
+  }
+  return buckets.map((b) => ({ label: b.label, ...group(b.trades) }))
+}
+
+export function bySymbol(trades, limit = 8) {
+  const map = new Map()
+  for (const t of trades) {
+    const key = (t.symbol || 'Unknown').toUpperCase()
+    if (!map.has(key)) map.set(key, [])
+    map.get(key).push(t)
+  }
+  return [...map.entries()]
+    .map(([symbol, list]) => ({ symbol, ...group(list) }))
+    .sort((a, b) => b.pnl - a.pnl)
+    .slice(0, limit)
+}
+
+/**
+ * P&L histogram. Bucket edges are derived from the data rather than fixed:
+ * a $50 bucket is meaningless to someone trading $5 positions and useless to
+ * someone trading $5,000 ones.
+ */
+export function winLossDistribution(trades, bucketCount = 8) {
+  const pnls = trades.map(net).filter(Number.isFinite)
+  if (!pnls.length) return []
+
+  const max = Math.max(...pnls.map(Math.abs))
+  if (max === 0) return [{ label: '$0', from: 0, to: 0, count: pnls.length, positive: true }]
+
+  // Symmetric around zero, so wins and losses are visually comparable rather
+  // than each scaled to their own extreme.
+  const half = Math.ceil(bucketCount / 2)
+  const step = max / half
+  const buckets = []
+  for (let i = -half; i < half; i++) {
+    const from = i * step
+    const to = (i + 1) * step
+    buckets.push({
+      from, to, positive: from >= 0,
+      // Only the lower edge is labelled. Eight full "-$393…-$294" ranges do
+      // not fit across a half-width panel — they collide into an unreadable
+      // smear — so the axis carries the edge and the tooltip carries the range.
+      label: fmtBucket(from),
+      range: `${fmtBucket(from)} to ${fmtBucket(to)}`,
+      // The topmost bucket is closed at the end so the single largest win
+      // isn't dropped by an exclusive upper bound.
+      count: pnls.filter((p) => p >= from && (i === half - 1 ? p <= to : p < to)).length,
+    })
+  }
+  return buckets
+}
+
+function fmtBucket(n) {
+  const rounded = Math.round(n)
+  return `${rounded < 0 ? '-' : ''}$${Math.abs(rounded)}`
+}
+
+// ---------------------------------------------------------------------------
+// Trading calendar
+// ---------------------------------------------------------------------------
+
+/**
+ * A month laid out as Monday-first weeks, each carrying its own rollup — the
+ * spec's eighth column.
+ *
+ * Days outside the month are included as padding so the grid stays rectangular,
+ * flagged with `outside` so they can be dimmed rather than looking like real
+ * days with no trades.
+ */
+export function calendarMonth(trades, year, month) {
+  const totals = new Map(dailyTotals(trades).map((d) => [d.date, d]))
+
+  const first = new Date(year, month, 1)
+  const start = new Date(first)
+  start.setDate(1 - ((first.getDay() + 6) % 7)) // back to Monday
+
+  const weeks = []
+  const cursor = new Date(start)
+  // Six rows covers every possible month layout; trailing all-outside weeks
+  // are dropped below so short months don't render an empty final row.
+  for (let w = 0; w < 6; w++) {
+    const days = []
+    for (let d = 0; d < 7; d++) {
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
+      const total = totals.get(key)
+      days.push({
+        key,
+        date: new Date(cursor),
+        day: cursor.getDate(),
+        outside: cursor.getMonth() !== month,
+        pnl: total?.pnl ?? 0,
+        count: total?.count ?? 0,
+        wins: total?.wins ?? 0,
+        trades: total?.trades ?? [],
+      })
+      cursor.setDate(cursor.getDate() + 1)
+    }
+    const inMonth = days.filter((d) => !d.outside)
+    weeks.push({
+      days,
+      // The rollup counts only days belonging to this month, so a week
+      // straddling a boundary isn't double-counted in both months.
+      pnl: inMonth.reduce((s, d) => s + d.pnl, 0),
+      count: inMonth.reduce((s, d) => s + d.count, 0),
+      tradingDays: inMonth.filter((d) => d.count > 0).length,
+    })
+  }
+  while (weeks.length && weeks[weeks.length - 1].days.every((d) => d.outside)) weeks.pop()
+  return weeks
+}
+
+/** Largest absolute daily P&L in a month — the heatmap's colour scale. */
+export function calendarScale(weeks) {
+  const values = weeks.flatMap((w) => w.days.filter((d) => !d.outside && d.count).map((d) => Math.abs(d.pnl)))
+  return values.length ? Math.max(...values) : 0
+}

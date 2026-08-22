@@ -12,14 +12,14 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 0 | Foundation: routing, shell/nav, top bar, schema superset, filterable stats core | ✅ Done |
-| 1 | Analysis module to full spec (filters, 9 widgets, ~30-metric stats block) | ⏸ Not started |
+| 1 | Analysis module to full spec (filters, 9 widgets, ~30-metric stats block) | ✅ Done |
 | 2 | Tools: Position Size Calculator, Forex Market Hours, tool shell | ✅ Done |
 | 3 | Journal split-pane + Trades page to spec | ✅ Done |
 | 4 | Dashboard widgets + Settings tabs & preferences | ✅ Done |
-| 5 | Broker accounts & auto-sync | 🟡 Done except credential-based cloud sync (vendor-gated) |
+| 5 | Broker accounts & auto-sync | 🟡 Done except sync while your machine is off (vendor-gated) |
 | 6 | Economic Calendar (Market) | ✅ Done — feed chosen (Apify / Investing.com) |
 | 7 | AI Report generation + weekly quota | ✅ Done — needs an Anthropic API key to run |
-| 8 | Backtesting (candle replay) | ⏸ Not started |
+| 8 | Backtesting (candle replay) | ✅ Done |
 | 9 | Trader POV / shared read-only dashboards | ⏸ Not started |
 | 10 | Community (lounges, leaderboard, affiliate) | ⏸ Not started — scope not confirmed |
 | 11 | Billing (Stripe tiers) & Security tab | ⏸ Not started — scope not confirmed |
@@ -30,10 +30,12 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 
 These block or shape later phases. None block Phases 0–4.
 
-1. **Broker sync vendor** — still open, but no longer blocking: phase 5 shipped the
-   account model and self-hosted sync without it. What it still gates is sync that
-   works while your machine is off, which needs a server holding the credential
-   (MetaApi.cloud, a hosted bridge, or a custom EA + webhook).
+1. **Broker sync vendor** — narrowed further. The bridge now logs in with an MT5
+   **investor** password (read-only at the broker) and syncs open positions and
+   account balance as well as closed trades, so MetaApi buys nothing except
+   *running while your machine is off*. That still needs a host: a Windows VPS
+   (~$5–15/mo, since the MetaTrader5 Python package is Windows-only and needs the
+   terminal) or a hosted bridge. Not blocking anything.
 2. ~~**Economic calendar feed**~~ — **decided.** The Apify actor
    `pintostudio/economic-calendar-data-investing-com`, wired up as
    `--provider apify`. The provider seam is unchanged, so switching later is still
@@ -42,12 +44,167 @@ These block or shape later phases. None block Phases 0–4.
    Recommendation: stay on Supabase Auth. Awaiting confirmation.
 4. **Scope of Community and Billing** — both add permanent operational and moderation
    burden. Confirm whether this stays a personal journal or becomes a multi-tenant SaaS.
-5. **Analysis account scoping** — the live app appears to show all accounts' trades on the
-   Analysis page regardless of the active account. Decide: all-accounts or active-account.
+5. **Analysis account scoping** — still open. Phase 1 shipped showing **all accounts**,
+   matching the live app's apparent behaviour. Scoping it to the active account is a
+   one-line change (`filterByAccount` from phase 5) if you'd rather it followed the
+   Trades page's switcher.
 
 ---
 
 ## Entries
+
+### 2026-08-13 — Investor-login sync: open positions and account balance
+
+Closes the last non-vendor gap in phase 5. Prompted by the observation that an
+MT5 **investor** password is read-only at the broker, which makes "this only
+reads" a property of the credential rather than a promise the script makes
+about itself.
+
+**Built**
+- Investor login in `mt5_bridge/`. The bridge can now log itself in rather than
+  attaching to a terminal someone left open — which is what makes unattended
+  operation possible. It prints which credential type it's using on startup.
+- `balance`, `equity`, `leverage` and `state_at` on `broker_accounts`, stamped
+  each sync. Added to `phase5.sql`, which is idempotent — **re-run it**.
+- Open-position sync via `positions_get()`, stored with `status='open'` and
+  keyed on the position ticket, so the close lands on the same row.
+- `reconcile_open()` — a position closed while the bridge was down, and outside
+  the lookback window, is looked up by ticket and closed out. With no history
+  at all it's left alone rather than given an invented exit price.
+- `mt5_bridge/test_sync.py` — 32 assertions against a stubbed terminal. The
+  MetaTrader5 package is Windows-only, so these paths could otherwise only be
+  tested by trading real money and waiting.
+
+**The bug this could easily have introduced**
+Floating P&L is not realised money. Three separate places would have counted
+it as such:
+- `stats.js` — every aggregate the Dashboard uses had no concept of `status`.
+  Nine of them now filter through `realised()`, inside the functions rather
+  than at the call sites so a new caller can't forget.
+- `brokerAccounts.js` — `addTrade` folded floating P&L into account totals and
+  counted a merely-green open position as a win.
+- `build_trades` in the bridge didn't set `status`. An upsert only writes the
+  columns it names, so a closed trade would have landed on the open row and
+  left it marked open forever, permanently excluded from every total.
+
+Each would have shown a number that was simply too good, with nothing visibly
+broken.
+
+**Verified**
+- 496 JS assertions and 32 Python ones passing; clean build.
+- `phase5.sql` re-run three times against PostgreSQL 16 on top of an existing
+  install; columns added, nothing else touched.
+- Browser: an account with two closed trades and one open position reads
+  $166.00 realised, 2 trades, 50% win rate, and `Open 1 ($480)` — the floating
+  figure kept visibly apart.
+
+---
+
+### 2026-08-13 — Phase 8: backtesting
+
+Listed as gated on "a historical OHLC source". It wasn't: MetaTrader,
+TradingView and most brokers export candle history as CSV, so the whole phase
+is buildable with no vendor at all.
+
+**Built**
+- `parseCandles` — CSV, TSV and JSON, including MetaTrader's tab-separated
+  `<DATE>`+`<TIME>` split, TradingView's ISO export, headerless files and bare
+  `[t,o,h,l,c,v]` arrays. Sorts, de-duplicates and rejects corrupt bars.
+- The simulation engine: order validation, fills, gaps, floating P&L.
+- `CandleChart` — hand-drawn SVG. Recharts has no candlestick primitive and
+  faking one from stacked bars fights the library the whole way.
+- Replay UI: play/pause, five speeds, single-step, scrub.
+- `backtest_sessions` table. Candles are **not** stored — bulk price data is
+  slow through Postgres, and redistributing licensed market data is the one
+  thing those agreements exist to prevent.
+
+**The decision the whole thing rests on**
+When a candle contains both the stop and the target, OHLC data cannot say
+which was touched first — that lives in ticks the file doesn't carry.
+Assuming the target is how a backtester flatters itself: every ambiguous bar
+becomes a win and a losing strategy reads as profitable. So ambiguity resolves
+to the **stop**, and the results panel says how many fills were decided that
+way and what the optimistic reading would have changed the result by. A
+strategy that only works if you assume the good outcome isn't a strategy.
+
+Gaps are the exception and are not ambiguous: if a candle opens beyond a
+level, that level filled at the open, because price was never at the level.
+
+**Bugs found by testing, not by reading**
+- The dot-to-dash rewrite for MetaTrader dates (`2026.08.13`) also ate the
+  decimal point in ISO milliseconds (`09:00:00.000Z` → `09:00:00-000Z`),
+  silently discarding every candle from an ordinary ISO export. Now only the
+  date portion is rewritten.
+- `date` and `time` both mapped to one key, so MetaTrader's second column
+  overwrote the first and every candle in a day collapsed onto midnight.
+- The chart's geometry memo didn't list the measured width as a dependency, so
+  after the ResizeObserver fired the candles were still drawn to the
+  pre-measurement 1000px — running to x=925 inside a 306-wide viewBox on a
+  phone. Found by measuring the DOM rather than looking at the screenshot.
+
+**Verified**
+- 464 assertions passing; clean build.
+- End-to-end browser run on a generated 400-candle MetaTrader file: parsed,
+  H1 detected, order placed, stepped, filled at the stop for exactly -$15.00
+  (0.1 lots x 100,000 x 0.0015).
+- The ambiguity path exercised with a purpose-built file: resolved to the stop
+  and reported the $400 swing.
+- Both themes, 1400px and 390px, no horizontal overflow.
+
+---
+
+### 2026-08-13 — Phase 1: the Analysis module
+
+The largest remaining piece, and the one the whole app points at. Most of the
+risk was already retired: `analytics.js` has been computing and testing these
+figures since phase 0, so this was widgets over tested maths rather than new
+logic.
+
+**Built**
+- Filter bar: 6 periods × 3 trade-type pills, driving every widget from one
+  place.
+- Equity Curve with an Equity/Drawdown toggle and the 8-figure strip beneath.
+- Win/Loss distribution, Long vs Short, Day of Week, Top Symbols.
+- Session Performance: a 24h UTC timeline with a live NOW marker and three
+  session cards.
+- Trading Calendar: month heatmap, the spec's eighth Weekly rollup column, and
+  a click-through day detail panel listing that day's trades.
+- "Your Stats": best/worst/average month plus the ~35-metric two-column grid.
+- New breakdowns in `analytics.js` (sessions, direction, day-of-week, symbols,
+  distribution, calendar) with 60 assertions in `test/breakdowns.test.mjs`.
+
+**Decisions worth recording**
+- **The equity curve ignores the winners/losers pill.** A curve drawn from
+  winners alone rises forever and a drawdown chart of losers only falls — both
+  are meaningless shapes. The panel says so when the pill is set.
+- **The calendar's month navigation is independent of the period filter.**
+  They mean different things; tying them together makes "Last 7 days" render
+  an almost empty grid.
+- **Streamer Mode masks money only.** Win rates, trade counts and Max DD % stay
+  readable — they give away nothing about account size, and blurring them while
+  identical figures sat unmasked in the breakdowns just looked broken.
+- **Padding days in the calendar show no P&L.** The weekly rollup deliberately
+  counts only the current month's days, so showing the neighbours' figures made
+  boundary weeks visibly fail to add up.
+- **Max Drawdown % shows a dash, not 0%**, when equity never rose above its
+  start. That's the spec's noted bug, and this is the fix.
+
+**Found in the browser, not in review**
+- Bar labels laid over the bars became unreadable exactly on the longest bars —
+  the rows that matter most. Each figure now has its own column.
+- Eight full distribution ranges ("-$393…-$294") collided into a smear; the
+  axis carries the lower edge and the tooltip carries the range.
+- Square calendar cells across eight columns were ~130px tall on a wide screen.
+- On mobile the card silently **cropped** the Weekly column rather than
+  overflowing, so the page reported no overflow while the column was simply
+  unreachable. The grid now scrolls inside its own container.
+
+**Verified**
+- 390 assertions passing; clean build.
+- Browser passes at 1400px and 390px, in both themes, with Streamer Mode on and
+  off. No `$` survives in any SVG text with Streamer Mode enabled.
+
+---
 
 ### 2026-08-13 — Calendar feed: Apify / Investing.com adapter
 

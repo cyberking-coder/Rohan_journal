@@ -90,15 +90,26 @@ export function fmtRelative(value, now = Date.now()) {
 // ---------------------------------------------------------------------------
 
 function blankStats() {
-  return { trades: 0, wins: 0, pnl: 0, open: 0, lastAt: null }
+  return { trades: 0, wins: 0, pnl: 0, open: 0, floating: 0, lastAt: null }
 }
 
 function addTrade(stats, trade) {
   const p = net(trade)
-  stats.trades += 1
-  stats.pnl += p
-  if (p > 0) stats.wins += 1
-  if (trade.status === 'open') stats.open += 1
+
+  // Open positions are kept strictly apart from closed ones. Their P&L is
+  // floating — it hasn't landed and can still reverse — so folding it into
+  // the account's total would overstate what the account has actually made,
+  // and counting a position that's merely green as a "win" would inflate the
+  // win rate on top of that.
+  if (trade.status === 'open') {
+    stats.open += 1
+    stats.floating += p
+  } else {
+    stats.trades += 1
+    stats.pnl += p
+    if (p > 0) stats.wins += 1
+  }
+
   const at = new Date(trade.closed_at || trade.traded_at).getTime()
   if (Number.isFinite(at) && (stats.lastAt === null || at > stats.lastAt)) stats.lastAt = at
   return stats

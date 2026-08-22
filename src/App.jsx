@@ -12,6 +12,7 @@ import Settings from './pages/Settings'
 import Market from './pages/Market'
 import ComingSoon from './pages/ComingSoon'
 import AIReport from './pages/AIReport'
+import Backtesting from './pages/Backtesting'
 import Login from './pages/Login'
 import { useTrades } from './lib/useTrades'
 import { useBrokerAccounts } from './lib/useBrokerAccounts'
@@ -87,6 +88,7 @@ function Journalized({ userId }) {
             {view === 'analysis' && <Analysis trades={trades} />}
             {view === 'market' && <Market />}
             {view === 'ai-report' && <AIReport trades={trades} />}
+            {view === 'backtesting' && <Backtesting />}
             {view === 'tools' && <Tools />}
             {view === 'settings' && <Settings trades={trades} onClearAll={clearAllTrades} brokerAccounts={brokerAccounts} />}
             {!current?.ready && <ComingSoon view={current} />}

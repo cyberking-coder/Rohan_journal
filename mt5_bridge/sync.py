@@ -33,10 +33,19 @@ JOURNAL_USER_ID = os.environ.get("JOURNAL_USER_ID")
 POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "60"))
 LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "30"))
 
-# Optional explicit login (otherwise attaches to the already-open terminal)
+# Optional explicit login (otherwise attaches to the already-open terminal).
+#
+# Use the INVESTOR password here, not the master one. MT5 treats an investor
+# login as read-only at the broker: it can read balance, positions and history
+# but cannot place, modify or close an order. That makes the read-only-ness a
+# property of the credential rather than a promise this script is making about
+# its own behaviour — which is the only kind worth relying on.
 MT5_LOGIN = os.environ.get("MT5_LOGIN")
 MT5_PASSWORD = os.environ.get("MT5_PASSWORD")
 MT5_SERVER = os.environ.get("MT5_SERVER")
+
+# Whether to mirror still-open positions into the journal.
+SYNC_OPEN = os.environ.get("SYNC_OPEN", "true").lower() not in ("0", "false", "no")
 
 CURSOR_FILE = os.path.join(os.path.dirname(__file__), ".mt5_cursor")
 MAP_FILE = os.path.join(os.path.dirname(__file__), "strategy_map.json")
@@ -99,7 +108,13 @@ def init_mt5():
         sys.exit(1)
     acc = mt5.account_info()
     if acc:
-        print(f"Connected to MT5 account {acc.login} ({acc.server}) — {acc.currency}")
+        # trade_allowed is False on an investor login. Saying so out loud is
+        # worth a line: it's the confirmation that the credential in .env is
+        # the read-only one.
+        mode = "investor (read-only)" if not acc.trade_allowed else "full trading access"
+        print(f"Connected to MT5 account {acc.login} ({acc.server}) — {acc.currency}, {mode}")
+        if acc.trade_allowed:
+            print("  Tip: use your INVESTOR password instead. This bridge only ever reads.")
 
 
 def read_cursor():
@@ -193,6 +208,12 @@ def build_trades(from_dt, to_dt, broker_account_id=None):
             "external_id": str(pid),
             "source": "mt5",
             "broker_account_id": broker_account_id,
+            # Explicit, and load-bearing. The upsert lands on the same
+            # (user_id, external_id) row the open-position sync wrote, and an
+            # upsert only touches the columns it names — so omitting this
+            # would leave a finished trade marked "open" forever, with its
+            # P&L permanently excluded from every total.
+            "status": "closed",
             "symbol": first_in.symbol,
             "side": side,
             "strategy": strategy,
@@ -210,6 +231,8 @@ def build_trades(from_dt, to_dt, broker_account_id=None):
             # reviewed yet, and pre-filling one would make every synced trade
             # look journaled in the app.
             "notes": "",
+            "opened_at": datetime.fromtimestamp(first_in.time, tz=timezone.utc).isoformat(),
+            "closed_at": close_dt.isoformat(),
             "traded_at": close_dt.isoformat(),
         }, )
     return trades
@@ -268,6 +291,130 @@ def stamp_sync(sb, account_id, error=None):
         print("Could not update sync status:", e)
 
 
+def stamp_account_state(sb, account_id):
+    """Snapshot balance, equity and leverage onto the account row.
+
+    A snapshot, not a history: the equity curve is already derived from the
+    trades, and a balance row per poll would be a second source of truth for
+    the same number that could disagree with the first.
+    """
+    if not account_id:
+        return
+    acc = mt5.account_info()
+    if not acc:
+        return
+    try:
+        sb.table("broker_accounts").update({
+            "balance": round(acc.balance, 2),
+            # Balance plus floating P&L — what the account is worth right now.
+            "equity": round(acc.equity, 2),
+            "leverage": int(acc.leverage or 0) or None,
+            "currency": acc.currency,
+            "state_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", account_id).execute()
+    except Exception as e:
+        # A missing column means phase5.sql predates this feature. Closed-trade
+        # sync still works, so this is a note rather than a failure.
+        print("Could not store account state (re-run supabase/phase5.sql?):", e)
+
+
+def build_open_positions(broker_account_id=None):
+    """Currently-open positions, in the journal's trade shape.
+
+    Keyed on the position ticket — the same id `build_trades` uses for the
+    closed round trip — so when the position closes, the closed-trade upsert
+    lands on this very row and flips it from open to closed rather than
+    leaving a duplicate behind.
+    """
+    positions = mt5.positions_get()
+    if positions is None:
+        print("positions_get returned None:", mt5.last_error())
+        return []
+
+    rows = []
+    for p in positions:
+        open_dt = datetime.fromtimestamp(p.time, tz=timezone.utc)
+        side = "Long" if p.type == mt5.POSITION_TYPE_BUY else "Short"
+        rows.append({
+            "user_id": JOURNAL_USER_ID,
+            "external_id": str(p.ticket),
+            "source": "mt5",
+            "broker_account_id": broker_account_id,
+            "status": "open",
+            "symbol": p.symbol,
+            "side": side,
+            "strategy": resolve_strategy(p.magic, p.comment),
+            "session": session_for(open_dt.hour),
+            "entry": round(p.price_open, 5),
+            # The live mark, not an exit — nothing has been realised yet.
+            "exit": round(p.price_current, 5),
+            "qty": round(p.volume, 2),
+            # Floating P&L. Every aggregate in the app filters on status, so
+            # this is never counted as realised profit.
+            "pnl": round(p.profit, 2),
+            "fees": round(-p.swap, 2),
+            "swap": round(p.swap, 2),
+            "stop_loss": round(p.sl, 5) if p.sl else None,
+            "take_profit": round(p.tp, 5) if p.tp else None,
+            "notes": "",
+            "opened_at": open_dt.isoformat(),
+            "traded_at": open_dt.isoformat(),
+        })
+    return rows
+
+
+def reconcile_open(sb, account_id, live_tickets):
+    """Close out rows the journal still thinks are open but the broker doesn't.
+
+    A position closed while the bridge was down usually gets picked up by the
+    closed-trade sync. If it closed outside the lookback window that sync
+    never sees it, and the row would sit there forever showing a position that
+    no longer exists. So anything missing from the live list is looked up
+    directly by ticket.
+    """
+    try:
+        stale = (sb.table("trades").select("id,external_id")
+                 .eq("user_id", JOURNAL_USER_ID)
+                 .eq("source", "mt5")
+                 .eq("status", "open")
+                 .execute())
+    except Exception as e:
+        print("Could not check open positions:", e)
+        return 0
+
+    orphans = [r for r in (stale.data or []) if r["external_id"] not in live_tickets]
+    if not orphans:
+        return 0
+
+    fixed = 0
+    for row in orphans:
+        ticket = row["external_id"]
+        # history_deals_get accepts a position filter, which finds the close
+        # regardless of how long ago it happened.
+        deals = mt5.history_deals_get(position=int(ticket)) if ticket.isdigit() else None
+        if not deals:
+            print(f"  position {ticket} is gone from MT5 but has no history — leaving it alone")
+            continue
+
+        out = [d for d in deals if d.entry != mt5.DEAL_ENTRY_IN]
+        if not out:
+            continue
+        last = max(out, key=lambda d: d.time)
+        gross = sum(d.profit for d in out)
+        costs = sum(d.commission + d.swap for d in deals)
+        sb.table("trades").update({
+            "status": "closed",
+            "exit": round(last.price, 5),
+            "pnl": round(gross, 2),
+            "fees": round(-costs, 2),
+            "traded_at": datetime.fromtimestamp(last.time, tz=timezone.utc).isoformat(),
+            "closed_at": datetime.fromtimestamp(last.time, tz=timezone.utc).isoformat(),
+        }).eq("id", row["id"]).execute()
+        fixed += 1
+
+    return fixed
+
+
 def sync_once(sb, account_id=None):
     from_dt = read_cursor()
     to_dt = datetime.now(timezone.utc)
@@ -287,6 +434,20 @@ def sync_once(sb, account_id=None):
         stamp_sync(sb, account_id, str(e))
         raise
 
+    if SYNC_OPEN:
+        try:
+            live = build_open_positions(account_id)
+            if live:
+                sb.table("trades").upsert(live, on_conflict="user_id,external_id").execute()
+            tickets = {r["external_id"] for r in live}
+            # Reconcile before reporting, so the count reflects reality.
+            closed_late = reconcile_open(sb, account_id, tickets)
+            note = f", {closed_late} closed late" if closed_late else ""
+            print(f"[{to_dt:%H:%M:%S}] {len(live)} open position(s){note}")
+        except Exception as e:
+            print("Open position sync failed:", e)
+
+    stamp_account_state(sb, account_id)
     stamp_sync(sb, account_id)
     # step the cursor back a little to catch late-settling deals
     write_cursor(to_dt - timedelta(hours=6))
