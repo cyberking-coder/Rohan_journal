@@ -24,6 +24,9 @@ export const DEFAULT_PREFS = {
   // '' means "follow the browser".
   timezone: '',
   profileVisibility: 'private',
+  // Which windows the Analysis module buckets trades into. PRD §43 is explicit
+  // that these must not be hard-coded; see src/lib/sessionConfig.js.
+  sessions: { preset: 'classic', mode: 'partition', sessions: null },
   notifications: {
     push: false,
     tradeAlerts: false,
@@ -43,6 +46,7 @@ function load() {
       ...DEFAULT_PREFS,
       ...saved,
       notifications: { ...DEFAULT_PREFS.notifications, ...(saved.notifications || {}) },
+      sessions: { ...DEFAULT_PREFS.sessions, ...(saved.sessions || {}) },
     }
   } catch {
     return { ...DEFAULT_PREFS }
@@ -84,6 +88,7 @@ export function ThemeProvider({ children, userId = null }) {
           ...p,
           ...data.preferences,
           notifications: { ...p.notifications, ...(data.preferences.notifications || {}) },
+          sessions: { ...p.sessions, ...(data.preferences.sessions || {}) },
         }))
       })
       // A missing `profiles` table just means phase4.sql hasn't been applied;

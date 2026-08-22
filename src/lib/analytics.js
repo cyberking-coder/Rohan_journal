@@ -7,6 +7,9 @@
 // Dashboard/Analysis pages still use.
 
 import { net } from './stats.js'
+import {
+  DEFAULT_SESSION_CONFIG, inWindow, minuteOfDay, resolveSessions, sessionAt,
+} from './sessionConfig.js'
 
 // ---------------------------------------------------------------------------
 // Filters
@@ -331,20 +334,24 @@ export function fmtDuration(minutes) {
 // Non-overlapping UTC sessions covering all 24 hours, so every trade lands in
 // exactly one bucket. Deliberately different from `sessions.js`'s four
 // overlapping city sessions — see the note at the top of that file.
-export const TRADING_SESSIONS = [
-  { id: 'asian', label: 'Asian', start: 22, end: 8, tint: 'var(--info)' },
-  { id: 'london', label: 'London', start: 8, end: 13, tint: 'var(--mint)' },
-  { id: 'newyork', label: 'New York', start: 13, end: 22, tint: 'var(--amber)' },
-]
+// Kept as an export because several callers still import it, but it is now
+// just the default preset resolved once — session times are a preference, not
+// a constant. See src/lib/sessionConfig.js and PRD §43.
+export const DEFAULT_SESSIONS = resolveSessions(DEFAULT_SESSION_CONFIG)
+export const TRADING_SESSIONS = DEFAULT_SESSIONS.sessions
 
-/** Which session a trade closed in, or null when it carries no usable time. */
-export function sessionOf(trade) {
+/**
+ * Which session a trade closed in, or null when it carries no usable time.
+ *
+ * `resolved` is a config from resolveSessions(). It defaults to the classic
+ * split so every existing caller keeps working, but a caller that has the
+ * user's preference should pass it — otherwise the page silently reports
+ * against sessions the user has changed.
+ */
+export function sessionOf(trade, resolved = DEFAULT_SESSIONS) {
   const at = closeTime(trade)
   if (at === null) return null
-  const hour = new Date(at).getUTCHours()
-  return TRADING_SESSIONS.find((s) => (
-    s.start < s.end ? hour >= s.start && hour < s.end : hour >= s.start || hour < s.end
-  ))?.id ?? null
+  return sessionAt(minuteOfDay(at), resolved)?.id ?? null
 }
 
 /** Aggregate stats for one bag of trades — the shape every breakdown returns. */
@@ -366,10 +373,28 @@ function group(trades) {
   }
 }
 
-export function bySession(trades) {
-  return TRADING_SESSIONS.map((s) => ({
+/**
+ * Per-session totals.
+ *
+ * The two modes count differently, and they have to:
+ *
+ *   partition — a trade belongs to exactly one session, so each is counted
+ *               against its single match and the rows sum to the total.
+ *   windows   — a trade belongs to every window it falls in. Counting only
+ *               the narrowest match, as sessionOf() does, would let Silver
+ *               Bullet permanently steal its trades from the NY AM kill zone
+ *               that contains it, leaving the wider window reading zero while
+ *               trades were plainly taken inside it.
+ */
+export function bySession(trades, resolved = DEFAULT_SESSIONS) {
+  const windows = resolved?.mode === 'windows'
+  return (resolved?.sessions || []).map((s) => ({
     ...s,
-    ...group(trades.filter((t) => sessionOf(t) === s.id)),
+    ...group(trades.filter((t) => {
+      if (!windows) return sessionOf(t, resolved) === s.id
+      const at = closeTime(t)
+      return at !== null && inWindow(minuteOfDay(at), s)
+    })),
   }))
 }
 

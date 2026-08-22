@@ -12,6 +12,7 @@ import {
   resolveTimezone, timezoneCity, timezoneOffsetLabel,
 } from '../lib/format'
 import { fmtPct } from '../lib/stats'
+import SessionEditor from '../components/SessionEditor'
 
 const TABS = [
   { key: 'profile', label: 'Profile' },
@@ -251,6 +252,14 @@ function PreferencesTab({ trades, onClearAll }) {
             ))}
           </select>
         </Row>
+      </Section>
+
+      <Section title="Trading Sessions"
+        subtitle="Which windows the Analysis module buckets your trades into.">
+        <SessionEditor
+          config={p.sessions}
+          onChange={(next) => p.setPref('sessions', next)}
+        />
       </Section>
 
       <Section title="Dismissed Notifications">

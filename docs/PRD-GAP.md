@@ -31,8 +31,10 @@ than the PRD asks · **missing** = nothing in the repo.
 2. **§27 Tags** — *now built, see `supabase/tags.sql` and `src/lib/tags.js`.*
    ICT/SMC concept tags plus mistake tags, filterable on Analysis, with
    per-tag performance and a standing figure for what mistakes have cost.
-3. **§43 Configurable session engine** — the PRD says *"do not permanently
-   hard-code session times"*; `analytics.js` currently hard-codes them.
+3. **§43 Configurable session engine** — *now built, see
+   `src/lib/sessionConfig.js`.* Presets (classic, four-way, ICT kill zones)
+   plus a full editor, in two modes: partitions that tile the day, and
+   overlapping named windows.
 4. **§53 Execution model** — spread, commission, slippage and swap in the
    backtester. Without it, backtest results are optimistic by construction.
 5. **§67 Backtest-vs-live comparison** — the payoff for 4.

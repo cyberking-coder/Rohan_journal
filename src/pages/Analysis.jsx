@@ -14,8 +14,12 @@ import {
   maxDrawdown, monthlyTotals, winLossDistribution,
 } from '../lib/analytics'
 import { filterByTags, mistakeCost } from '../lib/tags'
+import { resolveSessions } from '../lib/sessionConfig'
+import { usePrefs } from '../lib/theme'
 
 export default function Analysis({ trades = [] }) {
+  const { sessions: sessionPref } = usePrefs()
+  const sessionConfig = useMemo(() => resolveSessions(sessionPref), [sessionPref])
   const [period, setPeriod] = useState(DEFAULT_PERIOD)
   const [tradeType, setTradeType] = useState(DEFAULT_TRADE_TYPE)
   const [now, setNow] = useState(() => new Date())
@@ -48,7 +52,7 @@ export default function Analysis({ trades = [] }) {
   const curveStats = useMemo(() => computeAnalytics(curveTrades, trades), [curveTrades, trades])
   const dd = useMemo(() => maxDrawdown(curveTrades), [curveTrades])
 
-  const sessions = useMemo(() => bySession(scoped), [scoped])
+  const sessions = useMemo(() => bySession(scoped, sessionConfig), [scoped, sessionConfig])
   const directions = useMemo(() => byDirection(scoped), [scoped])
   const weekdays = useMemo(() => byDayOfWeek(scoped), [scoped])
   const symbols = useMemo(() => bySymbol(scoped), [scoped])
@@ -150,6 +154,12 @@ export default function Analysis({ trades = [] }) {
           <Panel title="Session Performance" delay={0.24} style={{ marginBottom: 14 }}
             right={<span style={{ fontSize: 10.5, color: 'var(--text-3)' }}>UTC</span>}>
             <SessionTimeline sessions={sessions} now={now} />
+            {/* Named, because the numbers below mean something different under
+                each preset and there is otherwise nothing on the page saying
+                which one is in force. */}
+            <p style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 12 }}>
+              {sessionConfig.label} · change in Settings
+            </p>
           </Panel>
 
           <Panel title="Trading Calendar" delay={0.26} style={{ marginBottom: 14 }}>
