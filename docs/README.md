@@ -133,10 +133,14 @@ is off" still needs a host.
 - ✅ Results scored by `computeAnalytics` — the same engine as the Analysis page, not a second implementation that would eventually disagree.
 - ✅ **Ambiguous fills are surfaced, not hidden.** When one candle contains both the stop and the target, OHLC cannot say which came first. Those resolve to the *stop* (pessimistic) and the results panel reports how many there were and what the optimistic reading would have changed the result by.
 
-### Phase 9 — Trader POV & sharing
-- `shared_dashboards` table: `{ id, owner_user_id, code, account_scope, sections_enabled[], created_at, expires_at, revoked }`.
-- `VIEW-XXXXXX` code generation and redemption; View/Share toggle.
-- Read-only rendering of Overview / Trades / Performance / Trade Analysis / Journal / AI Reports.
+### Phase 9 — Trader POV & sharing ✅ **Done**
+- ✅ `shared_dashboards` table, owner-only under RLS like every other table. `supabase/phase9.sql`.
+- ✅ **One door**: a `SECURITY DEFINER` function `shared_view(code)` is the only thing in the system permitted to read another user's rows. The `trades` table is not touched — no anonymous read policy exists anywhere, so a mistake in this feature cannot expose the database.
+- ✅ Codes are `VIEW-XXXX-XXXX-XXXX-XXXX` — 2^80, not the spec's 6 characters. These are bearer tokens in a URL and are copied rather than typed, so length is free; 6 characters is brute-forceable and every hit is somebody's whole history.
+- ✅ Section gating enforced in SQL, not the UI: a section left off is never returned, so inspecting the response reveals nothing.
+- ✅ **Hide amounts** — results in R multiples (each trade over the owner's average loss) instead of currency, so win rate, consistency and drawdown stay visible while account size doesn't. Verified: zero `$` anywhere on the page, including chart axes and tooltips.
+- ✅ Expiry, revoke (rather than delete, so the audit trail survives), view counts, and per-account scoping.
+- ✅ Warnings shown at the point of decision — including that AI reports quote the journal, so they leak notes even when the journal section is off.
 
 ### Phase 10 — Community *(optional — confirm scope first)*
 - Realtime lounges, member counts, affiliate code redemption, leaderboard, share cards.

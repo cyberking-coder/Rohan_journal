@@ -10,6 +10,8 @@ import {
   positionPnl, replay, toTradeRows, validateOrder,
 } from '../lib/backtest'
 import { TF_ORDER, useCandleSets, useCandles } from '../lib/useCandles'
+import { CostBreakdown, CostControls } from '../components/CostPanel'
+import { COST_PRESETS, DEFAULT_PRESET, costSummary } from '../lib/execution'
 
 // How many candles are visible at once. Enough context to read structure
 // without shrinking bodies to a smear.
@@ -49,6 +51,10 @@ export default function Backtesting() {
   // what the P&L came to — is derived from this plus the candles, so rewinding
   // and changing timeframe both reproduce the session exactly.
   const [actions, setActions] = useState([])
+  // Costs default to a real preset rather than to zero. Zero is the one value
+  // guaranteed to be wrong, and a backtest that silently assumes it is not a
+  // pessimistic estimate of a strategy — it is a different strategy.
+  const [costs, setCosts] = useState(() => ({ ...COST_PRESETS[DEFAULT_PRESET], preset: DEFAULT_PRESET }))
 
   const fileRef = useRef(null)
 
@@ -64,9 +70,11 @@ export default function Backtesting() {
   // and it's what makes scrubbing and timeframe changes exact rather than
   // approximate.
   const { open, closed } = useMemo(
-    () => replay(candles, actions, cursor),
-    [candles, actions, cursor],
+    () => replay(candles, actions, cursor, costs),
+    [candles, actions, cursor, costs],
   )
+
+  const costs_ = useMemo(() => costSummary(closedWithCosts(closed)), [closed])
 
   // ── Advancing ────────────────────────────────────────────────────────────
   // Just moves the cursor; the fills follow from `replay` above.
@@ -322,7 +330,12 @@ export default function Backtesting() {
           </Panel>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginBottom: 14 }}>
-            <Panel title="New Order" delay={0.04}>
+            <Panel title="Execution Costs" delay={0.035} style={{ marginBottom: 14 }}
+            right={<span style={{ fontSize: 10.5, color: 'var(--text-3)' }}>applied to every fill</span>}>
+            <CostControls costs={costs} onChange={setCosts} />
+          </Panel>
+
+          <Panel title="New Order" delay={0.04}>
               <Ticket price={current?.c} onPlace={place} symbol={symbol} onSymbol={setSymbol} />
             </Panel>
 
@@ -374,6 +387,8 @@ export default function Backtesting() {
                   <Stat label="Max DD" money={stats.maxDrawdown} colored />
                   <Stat label="Expectancy" money={stats.expectancy} colored />
                 </div>
+
+                <CostBreakdown summary={costs_} />
 
                 {ambiguity.count > 0 && <AmbiguityNote report={ambiguity} />}
               </>
@@ -569,12 +584,8 @@ function Loader({ onPick, hasSets, ready }) {
         </div>
       </div>
 
-      <div className="mono" style={{
-        maxWidth: 560, margin: '0 auto 22px', padding: '12px 14px', borderRadius: 10,
-        background: 'var(--hex-bg)', color: 'var(--text-2)', fontSize: 11.5,
-        overflowX: 'auto', whiteSpace: 'pre',
-      }}>{`cd mt5_bridge
-python export_candles.py --symbol XAUUSD --timeframes M5,M15,H1,H4 --days 365 --upload`}</div>
+      <CommandBlock command={`cd mt5_bridge
+python export_candles.py --symbol XAUUSD --timeframes M5,M15,H1,H4 --days 365 --upload`} />
 
       <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>
         or replay a file you already have
@@ -595,6 +606,45 @@ python export_candles.py --symbol XAUUSD --timeframes M5,M15,H1,H4 --days 365 --
   )
 }
 
+/**
+ * A command the user is meant to run.
+ *
+ * Wraps rather than scrolls. A horizontally scrolling block hid the tail of
+ * this one — which is `--upload`, the flag that makes the whole thing do what
+ * the surrounding text promises. Copying what was visible would have written a
+ * file instead, and nothing would have explained why.
+ */
+function CommandBlock({ command }) {
+  const [copied, setCopied] = useState(false)
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(command)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {
+      // Clipboard permission can be refused; the text is on screen regardless.
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 620, margin: '0 auto 22px', position: 'relative' }}>
+      <pre className="mono" style={{
+        margin: 0, padding: '12px 52px 12px 14px', borderRadius: 10,
+        background: 'var(--hex-bg)', color: 'var(--text-2)', fontSize: 11.5,
+        lineHeight: 1.7, textAlign: 'left',
+        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+      }}>{command}</pre>
+      <button onClick={copy} title="Copy"
+        style={{
+          position: 'absolute', top: 8, right: 8, padding: '4px 9px', borderRadius: 7,
+          fontSize: 10.5, fontWeight: 600, border: '1px solid var(--stroke)',
+          background: 'var(--card)', color: copied ? 'var(--mint)' : 'var(--text-3)',
+        }}>{copied ? 'Copied' : 'Copy'}</button>
+    </div>
+  )
+}
+
 function How({ title, body }) {
   return (
     <div style={{ padding: '12px 14px', borderRadius: 11, background: 'var(--card-2)', border: '1px solid var(--stroke)' }}>
@@ -607,4 +657,11 @@ function How({ title, body }) {
 const ghost = {
   padding: '8px 12px', borderRadius: 10, fontSize: 12.5,
   border: '1px solid var(--stroke)', color: 'var(--text-2)',
+}
+
+// The engine attaches a cost breakdown to each closed trade; the summary panel
+// wants just those. Trades closed before costs were configured have none, and
+// are skipped rather than counted as free.
+function closedWithCosts(closed) {
+  return (closed || []).map((t) => t.costs).filter(Boolean)
 }

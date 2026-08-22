@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import RatingSlider from './RatingSlider'
+import TagPicker from './TagPicker'
 import { screenshotSrc, uploadScreenshot } from '../lib/storage'
 import { contractSizeFor, computePnl, ASSET_GROUPS, STRATEGIES } from '../lib/instruments'
 import { parseRR, fmtRR, ratingOf } from '../lib/stats'
+import { normaliseTags, usedTags } from '../lib/tags'
 
 const SESSIONS = ['London', 'New York', 'Asia', 'Overlap']
 const CUSTOM = '__custom__'
@@ -23,7 +25,7 @@ function Labeled({ label, hint, children }) {
   )
 }
 
-export default function TradeForm({ open, onClose, onSubmit, userId, initial = null }) {
+export default function TradeForm({ open, onClose, onSubmit, userId, initial = null, trades = [] }) {
   const isEdit = Boolean(initial)
   const [form, setForm] = useState(blank())
   // 1-10, matching the journal's rating scale (see supabase/phase3.sql).
@@ -38,12 +40,16 @@ export default function TradeForm({ open, onClose, onSubmit, userId, initial = n
   const [preview, setPreview] = useState(null)
   const [err, setErr] = useState(null)
 
+  // The user's own vocabulary, so a tag they invented once is one keystroke
+  // away on every later trade instead of being retyped and mis-spelled.
+  const tagSuggestions = useMemo(() => usedTags(trades), [trades])
+
   function blank() {
     return {
       symbol: 'XAUUSD', side: 'Long', strategy: STRATEGIES[0], session: 'New York',
       entry: '', exit: '', sl: '', tp: '', qty: '0.10', pnl: '', fees: '2', rr: '',
       contractSize: '100',
-      notes: '', traded_at: new Date().toISOString().slice(0, 16),
+      notes: '', tags: [], traded_at: new Date().toISOString().slice(0, 16),
     }
   }
 
@@ -118,6 +124,7 @@ export default function TradeForm({ open, onClose, onSubmit, userId, initial = n
         rr: initial.rr ? fmtRR(initial.rr) : '',
         contractSize: String(contractSizeFor(initial.symbol) || 100),
         notes: initial.notes || '',
+        tags: Array.isArray(initial.tags) ? initial.tags : [],
         traded_at: initial.traded_at
           ? new Date(initial.traded_at).toISOString().slice(0, 16)
           : new Date().toISOString().slice(0, 16),
@@ -163,6 +170,9 @@ export default function TradeForm({ open, onClose, onSubmit, userId, initial = n
         rr: parseRR(form.rr),
         journal_rating: rating,
         notes: form.notes,
+        // Normalised on the way out rather than on the way in, so a tag typed
+        // in an unusual spelling is stored the same as the picked one.
+        tags: normaliseTags(form.tags),
         screenshot_url,
         traded_at: new Date(form.traded_at).toISOString(),
       }
@@ -325,6 +335,16 @@ export default function TradeForm({ open, onClose, onSubmit, userId, initial = n
                   <input type="file" accept="image/*" onChange={onPickFile} style={{ display: 'none' }} />
                 </label>
               )}
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <Labeled label="Tags" hint="what you saw, and what you did">
+                <TagPicker
+                  value={form.tags}
+                  onChange={(tags) => setForm((f) => ({ ...f, tags }))}
+                  suggestions={tagSuggestions}
+                />
+              </Labeled>
             </div>
 
             <div style={{ marginTop: 14 }}>

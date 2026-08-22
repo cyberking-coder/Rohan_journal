@@ -50,6 +50,13 @@ export const VIEWS = [
     description: 'AI-written performance reviews of your trading.',
   },
   {
+    key: 'funded',
+    label: 'Funded',
+    icon: '◆',
+    ready: true,
+    description: 'Prop-firm challenge rules, drawdown limits and pass/fail.',
+  },
+  {
     key: 'backtesting',
     label: 'Backtesting',
     icon: '⧗',
@@ -81,6 +88,11 @@ export const VIEWS = [
 ]
 
 export const DEFAULT_VIEW = 'dashboard'
+
+// `shared` is deliberately absent from VIEWS: it is not a section of the app
+// but a separate page for someone who isn't signed in, handled in App.jsx
+// before the auth gate. Listing it here would put it in the sidebar and the
+// command palette, where it means nothing without a code.
 
 const BY_KEY = new Map(VIEWS.map((v) => [v.key, v]))
 

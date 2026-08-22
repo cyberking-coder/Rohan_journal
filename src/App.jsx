@@ -13,7 +13,9 @@ import Market from './pages/Market'
 import ComingSoon from './pages/ComingSoon'
 import AIReport from './pages/AIReport'
 import Backtesting from './pages/Backtesting'
+import Funded from './pages/Funded'
 import Login from './pages/Login'
+import SharedView from './pages/SharedView'
 import { useTrades } from './lib/useTrades'
 import { useBrokerAccounts } from './lib/useBrokerAccounts'
 import { useAuth } from './lib/AuthContext'
@@ -22,6 +24,17 @@ import { getView } from './lib/views'
 
 export default function App() {
   const { user, loading: authLoading, requiresAuth } = useAuth()
+
+  // A share link is opened by someone with no account, so this is checked
+  // before the auth gate and before waiting on the session. Its own page,
+  // outside the shell — no navigation, nothing else reachable.
+  //
+  // Reading the URL directly rather than through useView(): the router's view
+  // list is the signed-in app's, and 'shared' deliberately isn't in it.
+  if (typeof window !== 'undefined'
+      && new URLSearchParams(window.location.search).get('view') === 'shared') {
+    return <SharedView />
+  }
 
   if (authLoading) return <FullScreenLoader />
   if (requiresAuth && !user) return <Login />
@@ -88,6 +101,7 @@ function Journalized({ userId }) {
             {view === 'analysis' && <Analysis trades={trades} />}
             {view === 'market' && <Market />}
             {view === 'ai-report' && <AIReport trades={trades} />}
+            {view === 'funded' && <Funded trades={trades} brokerAccounts={brokerAccounts.accounts} />}
             {view === 'backtesting' && <Backtesting />}
             {view === 'tools' && <Tools />}
             {view === 'settings' && <Settings trades={trades} onClearAll={clearAllTrades} brokerAccounts={brokerAccounts} />}
@@ -103,7 +117,7 @@ function Journalized({ userId }) {
         onAdd={openForm}
       />
 
-      <TradeForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={submitTrade} userId={userId} initial={editing} />
+      <TradeForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={submitTrade} userId={userId} initial={editing} trades={trades} />
     </Shell>
   )
 }

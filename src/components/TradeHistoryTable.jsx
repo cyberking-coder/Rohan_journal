@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { net } from '../lib/stats'
-import Money from './Money'
+import Money, { Amount } from './Money'
 import { closeTime, openTime } from '../lib/analytics'
 import { isSynced, sourceLabel, tradeSummaryText } from '../lib/accounts'
 import { usePrefs } from '../lib/theme'
 import { formatDateTime } from '../lib/format'
+import { TagRow } from './TagPicker'
 
 // The Trades page history table, laid out per the spec: stacked open/close
 // timestamps, direction badge, prices, size, P&L, source, and row actions.
-export default function TradeHistoryTable({ trades, onDelete, onEdit }) {
+export default function TradeHistoryTable({ trades, onDelete, onEdit, unit = 'money' }) {
   const [copiedId, setCopiedId] = useState(null)
   // Timestamps render in the user's chosen timezone (Settings -> Timezone).
   const { timezone } = usePrefs()
@@ -63,7 +64,16 @@ export default function TradeHistoryTable({ trades, onDelete, onEdit }) {
                   </div>
                 </td>
 
-                <td style={{ ...cell, fontWeight: 600, fontFamily: 'var(--mono)' }}>{t.symbol}</td>
+                {/* Tags sit under the symbol rather than in a column of their
+                    own: a tenth column would push the table's minimum width
+                    past what a phone can show, and the symbol is what the eye
+                    lands on anyway. */}
+                <td style={{ ...cell, fontWeight: 600, fontFamily: 'var(--mono)' }}>
+                  {t.symbol}
+                  {Array.isArray(t.tags) && t.tags.length > 0 && (
+                    <div style={{ marginTop: 5 }}><TagRow tags={t.tags} max={3} /></div>
+                  )}
+                </td>
 
                 <td style={cell}>
                   <span style={{
@@ -81,7 +91,7 @@ export default function TradeHistoryTable({ trades, onDelete, onEdit }) {
                 <td style={{ ...cell, fontFamily: 'var(--mono)', fontSize: 13 }}>{t.qty ?? '—'}</td>
 
                 <td style={{ ...cell, fontFamily: 'var(--mono)', fontSize: 13.5, fontWeight: 600 }}>
-                  <Money value={pnl} colored />
+                  <Amount value={pnl} unit={unit} colored />
                 </td>
 
                 <td style={cell}>

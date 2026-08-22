@@ -5,8 +5,9 @@ import {
   Tooltip, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
 import { useTheme } from '../lib/theme'
-import Money from './Money'
-import { TRADING_SESSIONS, cumulativeEquity, drawdownSeries } from '../lib/analytics'
+import Money, { Amount } from './Money'
+import { cumulativeEquity, drawdownSeries } from '../lib/analytics'
+import { fmtMinute, segments } from '../lib/sessionConfig'
 
 // Same reasoning as charts.jsx: Recharts writes these onto SVG presentation
 // attributes, where `var(--token)` isn't legal, so the palette is resolved in
@@ -43,12 +44,17 @@ function Tip({ children }) {
 }
 
 const money = (v) => `${v < 0 ? '-' : ''}$${Math.abs(Math.round(v)).toLocaleString()}`
+// A shared view can express results as risk multiples instead of currency.
+// The axis and tooltip have to follow, or the chart quietly re-prints the
+// account size the owner asked to hide.
+const rMultiple = (v) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}R`
+const amountFmt = (unit) => (unit === 'R' ? rMultiple : money)
 
 // ---------------------------------------------------------------------------
 // Equity curve, with the Drawdown view behind a toggle
 // ---------------------------------------------------------------------------
 
-export function EquityDrawdown({ trades }) {
+export function EquityDrawdown({ trades, unit = 'money' }) {
   const [mode, setMode] = useState('equity')
   const c = usePalette()
   const mask = useMask()
@@ -64,6 +70,7 @@ export function EquityDrawdown({ trades }) {
 
   const isDrawdown = mode === 'drawdown'
   const stroke = isDrawdown ? c.red : c.mint
+  const fmt = amountFmt(unit)
 
   return (
     <div>
@@ -94,13 +101,13 @@ export function EquityDrawdown({ trades }) {
             <CartesianGrid stroke={c.grid} vertical={false} />
             <XAxis dataKey="label" tick={{ fill: c.axis, fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={44} />
             <YAxis tick={{ fill: c.axis, fontSize: 11 }} axisLine={false} tickLine={false}
-              tickFormatter={mask.axis(money)} width={64} />
+              tickFormatter={mask.axis(fmt)} width={64} />
             <ReferenceLine y={0} stroke={c.axis} strokeDasharray="3 3" />
             <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
               <Tip>
                 <div style={{ color: 'var(--text-3)', marginBottom: 3 }}>{label}</div>
                 <div style={{ color: stroke }}>
-                  {isDrawdown ? 'Drawdown' : 'Equity'}&nbsp;&nbsp;{mask.text(money(payload[0].value))}
+                  {isDrawdown ? 'Drawdown' : 'Equity'}&nbsp;&nbsp;{mask.text(fmt(payload[0].value))}
                 </div>
               </Tip>
             ) : null} />
@@ -114,7 +121,7 @@ export function EquityDrawdown({ trades }) {
 }
 
 /** The eight-figure strip beneath the equity curve. */
-export function MetricStrip({ items }) {
+export function MetricStrip({ items, unit = 'money' }) {
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(108px, 1fr))',
@@ -128,7 +135,7 @@ export function MetricStrip({ items }) {
           </div>
           <div className="mono" style={{ fontSize: 14.5, fontWeight: 600, marginTop: 4, color: m.color || 'var(--text)' }}>
             {/* Money masks itself; counts and percentages stay readable. */}
-            {m.money !== undefined ? <Money value={m.money} digits={0} colored={m.colored} /> : m.value}
+            {m.money !== undefined ? <Amount value={m.money} unit={unit} digits={0} colored={m.colored} /> : m.value}
           </div>
         </div>
       ))}
@@ -177,7 +184,7 @@ export function DistributionChart({ buckets }) {
  * components. Bars are drawn from a shared centre so losses read as losses
  * rather than as short wins.
  */
-export function ComparisonBars({ rows, labelKey = 'label', emptyMessage = 'Nothing to show yet.' }) {
+export function ComparisonBars({ rows, labelKey = 'label', unit = 'money', emptyMessage = 'Nothing to show yet.' }) {
   const active = rows.filter((r) => r.count > 0)
   if (!active.length) return <EmptyChart height={140} message={emptyMessage} />
 
@@ -212,7 +219,7 @@ export function ComparisonBars({ rows, labelKey = 'label', emptyMessage = 'Nothi
             </div>
 
             <div className="mono" style={{ width: 74, flexShrink: 0, fontSize: 11.5, fontWeight: 600, textAlign: 'right' }}>
-              {r.count ? <Money value={r.pnl} digits={0} colored /> : ''}
+              {r.count ? <Amount value={r.pnl} unit={unit} digits={unit === 'R' ? 1 : 0} colored /> : ''}
             </div>
           </div>
         )
@@ -234,35 +241,41 @@ export function ComparisonBars({ rows, labelKey = 'label', emptyMessage = 'Nothi
  * historical trivia.
  */
 export function SessionTimeline({ sessions, now = new Date() }) {
-  const hour = now.getUTCHours() + now.getUTCMinutes() / 60
-  const left = (hour / 24) * 100
+  // The bar draws the same session list the cards below it summarise, rather
+  // than a module-level constant. They used to be able to disagree — the bar
+  // said "London 08–13" while the cards counted whatever the user had
+  // configured, and nothing in the UI admitted it.
+  const minute = now.getUTCHours() * 60 + now.getUTCMinutes()
+  const left = (minute / 1440) * 100
 
   return (
     <div>
       <div style={{ position: 'relative', height: 44, borderRadius: 10, overflow: 'hidden', background: 'var(--card-2)' }}>
-        {TRADING_SESSIONS.map((s) => {
-          // The Asian session wraps midnight, so it draws as two segments —
-          // one at each end of the axis — rather than a single block running
-          // backwards off the edge.
-          const spans = s.start < s.end
-            ? [[s.start, s.end]]
-            : [[s.start, 24], [0, s.end]]
-          return spans.map(([from, to], i) => (
-            <div key={`${s.id}-${i}`} title={`${s.label} ${s.start}:00–${s.end}:00 UTC`}
+        {sessions.map((s) => (
+          // A window that wraps midnight draws as two segments — one at each
+          // end of the axis — rather than a single block running backwards off
+          // the edge.
+          segments(s).map(({ start, end }, i) => (
+            <div key={`${s.id}-${i}`}
+              title={`${s.label} ${fmtMinute(s.start)}–${fmtMinute(s.end)} UTC`}
               style={{
                 position: 'absolute', top: 0, bottom: 0,
-                left: `${(from / 24) * 100}%`, width: `${((to - from) / 24) * 100}%`,
+                left: `${(start / 1440) * 100}%`, width: `${((end - start) / 1440) * 100}%`,
                 background: s.tint, opacity: 0.16,
                 borderRight: '1px solid var(--stroke)',
               }} />
           ))
-        })}
+        ))}
 
-        {TRADING_SESSIONS.map((s) => {
-          const mid = s.start < s.end ? (s.start + s.end) / 2 : ((s.start + 24 + s.end) / 2) % 24
+        {sessions.map((s) => {
+          const width = s.start < s.end ? s.end - s.start : 1440 - s.start + s.end
+          const mid = ((s.start + width / 2) % 1440)
+          // A narrow window can't hold its own name, and overlapping labels are
+          // worse than none — kill zones are often under two hours wide.
+          if (width < 100) return null
           return (
             <div key={`${s.id}-label`} style={{
-              position: 'absolute', top: 6, left: `${(mid / 24) * 100}%`, transform: 'translateX(-50%)',
+              position: 'absolute', top: 6, left: `${(mid / 1440) * 100}%`, transform: 'translateX(-50%)',
               fontSize: 10, fontWeight: 600, color: 'var(--text-2)', whiteSpace: 'nowrap', pointerEvents: 'none',
             }}>{s.label}</div>
           )
@@ -294,7 +307,7 @@ export function SessionTimeline({ sessions, now = new Date() }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <span style={{ fontSize: 12.5, fontWeight: 600 }}>{s.label}</span>
               <span style={{ fontSize: 9.5, color: 'var(--text-3)' }} className="mono">
-                {String(s.start).padStart(2, '0')}–{String(s.end).padStart(2, '0')} UTC
+                {fmtMinute(s.start)}–{fmtMinute(s.end)} UTC
               </span>
             </div>
             <div className="mono" style={{ fontSize: 17, fontWeight: 600, marginTop: 6 }}>
