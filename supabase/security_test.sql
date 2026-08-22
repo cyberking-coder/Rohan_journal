@@ -125,6 +125,11 @@ insert into public.trades (user_id, symbol, side, pnl, fees, traded_at, pre_trad
 values ('aaaaaaaa-0000-0000-0000-000000000001', 'XAUUSD', 'Long', -200, 0, now(),
         'SECRET SETUP', 'SECRET NOTES');
 
+-- Tag it with a mistake. "revenge-trade" is an admission, and it must travel
+-- with the written journal rather than leaking on its own.
+update public.trades set tags = array['fvg','revenge-trade']
+  where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' and symbol = 'XAUUSD';
+
 -- A screenshot belonging to each user, under their own folder.
 insert into storage.objects (bucket_id, name) values
   ('screenshots', 'aaaaaaaa-0000-0000-0000-000000000001/chart-a.png'),
@@ -415,6 +420,20 @@ select record('share: journal present when enabled',
 -- Never returned, whatever the sections say.
 select record('share: no owner identity in the payload',
   (public.shared_view('VIEW-LIVE')::text) not like '%aaaaaaaa-0000%', '');
+-- Tags follow the journal section. A viewer denied the write-up must not be
+-- handed the same admission as a one-word tag.
+select record('share: tags present when journal enabled',
+  exists (
+    select 1 from jsonb_array_elements(public.shared_view('VIEW-LIVE')->'trades') t
+    where t->'tags' ? 'revenge-trade'
+  ), 'enabled but not returned');
+
+select record('share: tags withheld without journal',
+  not exists (
+    select 1 from jsonb_array_elements(public.shared_view('VIEW-NOJOURNAL')->'trades') t
+    where t->'tags' ? 'revenge-trade'
+  ), 'a mistake tag leaked without the journal');
+
 select record('share: no raw trade ids',
   not exists (
     select 1 from jsonb_array_elements(public.shared_view('VIEW-LIVE')->'trades') t

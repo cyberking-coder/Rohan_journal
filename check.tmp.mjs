@@ -1,24 +1,23 @@
 import { chromium } from 'playwright-core'
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--headless=new'] })
-const p = await b.newPage()
-const errs = []
-p.on('pageerror', e => errs.push('PAGEERROR ' + e.message))
-await p.goto('http://localhost:4173/?view=funded', { waitUntil: 'networkidle' })
-await p.evaluate(() => {
-  localStorage.setItem('forex_greek_funded', JSON.stringify([{
-    id: 'local-1', label: 'FP 100k', firm: 'FundingPips', phase: 'Phase 1',
-    brokerAccountId: null, startingBalance: 100000, profitTarget: 8000,
-    dailyLossLimit: 5000, maxLoss: 10000, minTradingDays: 4,
-    consistencyLimit: 0.4, drawdownType: 'static', dayResetOffsetMinutes: 0,
-    startedAt: '', archived: false,
-  }]))
-})
-await p.reload({ waitUntil: 'networkidle' })
+const p = await b.newPage({ viewport: { width: 1280, height: 1000 } })
+const errs = []; p.on('pageerror', e => errs.push(String(e)))
+await p.goto('http://localhost:4173/?view=trades', { waitUntil: 'networkidle' })
 await p.waitForTimeout(1200)
-const card = await p.locator('section.card').first().innerText()
-console.log('CARD:\n' + card)
-console.log('H-OVERFLOW:', await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth))
-await p.setViewportSize({ width: 390, height: 800 }); await p.waitForTimeout(500)
-console.log('MOBILE-OVERFLOW:', await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth))
+await p.locator('button', { hasText: 'Add Trade' }).first().click(); await p.waitForTimeout(1000)
+const inp = p.locator('input[placeholder*="liquidity"]').first()
+await inp.evaluate(el => { el.scrollIntoView({ block: 'center' }); el.dataset.t = 'tagbox' }); await p.waitForTimeout(300)
+const box = p.locator('input[data-t="tagbox"]')
+await box.fill('sweep'); await p.waitForTimeout(500); await box.press('Enter'); await p.waitForTimeout(400)
+await box.fill('my own thing'); await p.waitForTimeout(500); await box.press('Enter'); await p.waitForTimeout(400)
+let body = await p.locator('body').innerText()
+console.log('CHIPS:', /Liquidity Sweep/.test(body), /My Own Thing/.test(body))
+await box.fill('Liquidity Sweep'); await p.waitForTimeout(400); await box.press('Enter'); await p.waitForTimeout(400)
+body = await p.locator('body').innerText()
+console.log('DUP OCCURRENCES:', body.split('Liquidity Sweep').length - 1)
+await box.press('Backspace'); await p.waitForTimeout(400)
+body = await p.locator('body').innerText()
+console.log('AFTER BACKSPACE, My Own Thing gone:', !/My Own Thing/.test(body))
+console.log('OVERFLOW:', await p.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth))
 console.log('ERRORS:', errs)
 await b.close()

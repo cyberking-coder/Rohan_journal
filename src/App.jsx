@@ -117,7 +117,7 @@ function Journalized({ userId }) {
         onAdd={openForm}
       />
 
-      <TradeForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={submitTrade} userId={userId} initial={editing} />
+      <TradeForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={submitTrade} userId={userId} initial={editing} trades={trades} />
     </Shell>
   )
 }

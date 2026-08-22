@@ -4,6 +4,7 @@ import { PageHeader, Panel } from '../components/common'
 import Money from '../components/Money'
 import TradingCalendar from '../components/TradingCalendar'
 import StatGrid from '../components/StatGrid'
+import { MistakeSummary, TagFilter, TagPerformance } from '../components/TagInsights'
 import {
   ComparisonBars, DistributionChart, EquityDrawdown, MetricStrip, SessionTimeline,
 } from '../components/AnalysisCharts'
@@ -12,11 +13,14 @@ import {
   byDayOfWeek, byDirection, bySession, bySymbol, computeAnalytics, filterTrades,
   maxDrawdown, monthlyTotals, winLossDistribution,
 } from '../lib/analytics'
+import { filterByTags, mistakeCost } from '../lib/tags'
 
 export default function Analysis({ trades = [] }) {
   const [period, setPeriod] = useState(DEFAULT_PERIOD)
   const [tradeType, setTradeType] = useState(DEFAULT_TRADE_TYPE)
   const [now, setNow] = useState(() => new Date())
+  const [tags, setTags] = useState([])
+  const [tagMode, setTagMode] = useState('any')
 
   // The session timeline's NOW marker has to move, or it's a decoration that
   // quietly becomes a lie. A minute is finer than the marker can show.
@@ -25,15 +29,21 @@ export default function Analysis({ trades = [] }) {
     return () => clearInterval(id)
   }, [])
 
-  const scoped = useMemo(() => filterTrades(trades, { period, tradeType }), [trades, period, tradeType])
+  const scoped = useMemo(
+    () => filterByTags(filterTrades(trades, { period, tradeType }), tags, tagMode),
+    [trades, period, tradeType, tags, tagMode],
+  )
   const a = useMemo(() => computeAnalytics(scoped, trades), [scoped, trades])
 
   // Deliberately computed from the *period* filter only, ignoring the
   // winners/losers pill. A curve drawn from winners alone rises forever and
   // a drawdown chart of losers only falls — both are meaningless shapes.
+  // The tag filter DOES apply here, unlike the winners/losers pill: "my equity
+  // curve on FVG trades" is a real and useful shape, whereas a curve of
+  // winners only rises forever and means nothing.
   const curveTrades = useMemo(
-    () => filterTrades(trades, { period, tradeType: 'all' }),
-    [trades, period],
+    () => filterByTags(filterTrades(trades, { period, tradeType: 'all' }), tags, tagMode),
+    [trades, period, tags, tagMode],
   )
   const curveStats = useMemo(() => computeAnalytics(curveTrades, trades), [curveTrades, trades])
   const dd = useMemo(() => maxDrawdown(curveTrades), [curveTrades])
@@ -44,6 +54,7 @@ export default function Analysis({ trades = [] }) {
   const symbols = useMemo(() => bySymbol(scoped), [scoped])
   const distribution = useMemo(() => winLossDistribution(scoped), [scoped])
   const months = useMemo(() => monthlyTotals(scoped), [scoped])
+  const mistakes = useMemo(() => mistakeCost(scoped), [scoped])
 
   const pf = a.profitFactorLabel
 
@@ -76,6 +87,9 @@ export default function Analysis({ trades = [] }) {
               }}>{PERIODS[k].label}</button>
           ))}
         </div>
+
+        <TagFilter trades={trades} selected={tags} onChange={setTags}
+          mode={tagMode} onMode={setTagMode} />
 
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           {TRADE_TYPE_KEYS.map((k) => (
@@ -142,7 +156,20 @@ export default function Analysis({ trades = [] }) {
             <TradingCalendar trades={scoped} />
           </Panel>
 
-          <Panel title="Your Stats" delay={0.28}>
+          <Panel title="Tag Performance" delay={0.28} style={{ marginBottom: 14 }}
+            right={<span style={{ fontSize: 10.5, color: 'var(--text-3)' }}>within the filters above</span>}>
+            <TagPerformance trades={scoped} />
+          </Panel>
+
+          {/* Hidden entirely rather than shown empty: an empty panel headed
+              "What Mistakes Cost" reads as a broken widget, not as good news. */}
+          {mistakes.trades > 0 && (
+            <Panel title="What Mistakes Cost" delay={0.3} style={{ marginBottom: 14 }}>
+              <MistakeSummary trades={scoped} />
+            </Panel>
+          )}
+
+          <Panel title="Your Stats" delay={0.32}>
             <StatGrid a={a} months={months} />
           </Panel>
         </>

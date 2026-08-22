@@ -17,6 +17,7 @@ was applied, just run it again.
 | 9 | `phase7.sql` | `ai_reports` — the AI report archive and its weekly quota bucket. | Optional; the AI Report page says so if it's absent. |
 | 11 | `phase9.sql` | `shared_dashboards` plus the `shared_view()` function that read-only share links go through. | Optional; only needed for sharing. |
 | 10 | `phase8.sql` | `backtest_sessions` and the per-user `candles` table the Backtesting page replays from. | Optional; replay also works from a file. **Re-run it** if you applied it before the candles table existed. |
+| 13 | `tags.sql` | `trades.tags` plus its GIN index, and the `shared_view()` update that gates tags behind the journal section. | Optional; the tag UI is inert without it. |
 | 12 | `funded.sql` | `funded_accounts` — prop-firm challenge rules. Balances and pass/fail are derived from trades, never stored. | Optional; only needed for the Funded page. |
 
 `enable-auth.sql` and `migrate-numeric.sql` are one-off fixes from earlier in

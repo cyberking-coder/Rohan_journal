@@ -28,8 +28,9 @@ than the PRD asks · **missing** = nothing in the repo.
 1. **§31–32 Funded Account module** — *now built, see `supabase/funded.sql`.*
    Prop-firm rule tracking: profit target, daily loss limit, max loss, minimum
    trading days, consistency rule, ACTIVE/PASSED/FAILED.
-2. **§27 Tags** — ICT/SMC concept tags (FVG, liquidity sweep, BOS, CHOCH, order
-   block, kill zones) plus mistake tags, filterable and reportable.
+2. **§27 Tags** — *now built, see `supabase/tags.sql` and `src/lib/tags.js`.*
+   ICT/SMC concept tags plus mistake tags, filterable on Analysis, with
+   per-tag performance and a standing figure for what mistakes have cost.
 3. **§43 Configurable session engine** — the PRD says *"do not permanently
    hard-code session times"*; `analytics.js` currently hard-codes them.
 4. **§53 Execution model** — spread, commission, slippage and swap in the
