@@ -569,12 +569,8 @@ function Loader({ onPick, hasSets, ready }) {
         </div>
       </div>
 
-      <div className="mono" style={{
-        maxWidth: 560, margin: '0 auto 22px', padding: '12px 14px', borderRadius: 10,
-        background: 'var(--hex-bg)', color: 'var(--text-2)', fontSize: 11.5,
-        overflowX: 'auto', whiteSpace: 'pre',
-      }}>{`cd mt5_bridge
-python export_candles.py --symbol XAUUSD --timeframes M5,M15,H1,H4 --days 365 --upload`}</div>
+      <CommandBlock command={`cd mt5_bridge
+python export_candles.py --symbol XAUUSD --timeframes M5,M15,H1,H4 --days 365 --upload`} />
 
       <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>
         or replay a file you already have
@@ -591,6 +587,45 @@ python export_candles.py --symbol XAUUSD --timeframes M5,M15,H1,H4 --days 365 --
         <How title="TradingView" body="Open the chart, then the export icon above it → Export chart data. Saves a comma-separated .csv." />
         <How title="Anything else" body="Any file with time, open, high, low and close columns works — CSV, TSV or JSON, headers optional." />
       </div>
+    </div>
+  )
+}
+
+/**
+ * A command the user is meant to run.
+ *
+ * Wraps rather than scrolls. A horizontally scrolling block hid the tail of
+ * this one — which is `--upload`, the flag that makes the whole thing do what
+ * the surrounding text promises. Copying what was visible would have written a
+ * file instead, and nothing would have explained why.
+ */
+function CommandBlock({ command }) {
+  const [copied, setCopied] = useState(false)
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(command)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {
+      // Clipboard permission can be refused; the text is on screen regardless.
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 620, margin: '0 auto 22px', position: 'relative' }}>
+      <pre className="mono" style={{
+        margin: 0, padding: '12px 52px 12px 14px', borderRadius: 10,
+        background: 'var(--hex-bg)', color: 'var(--text-2)', fontSize: 11.5,
+        lineHeight: 1.7, textAlign: 'left',
+        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+      }}>{command}</pre>
+      <button onClick={copy} title="Copy"
+        style={{
+          position: 'absolute', top: 8, right: 8, padding: '4px 9px', borderRadius: 7,
+          fontSize: 10.5, fontWeight: 600, border: '1px solid var(--stroke)',
+          background: 'var(--card)', color: copied ? 'var(--mint)' : 'var(--text-3)',
+        }}>{copied ? 'Copied' : 'Copy'}</button>
     </div>
   )
 }
