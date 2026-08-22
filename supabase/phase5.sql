@@ -107,3 +107,28 @@ begin
       on delete set null;
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Live account state (added after the first phase 5 release)
+-- ---------------------------------------------------------------------------
+-- Re-run this file to add these columns to an existing install; the whole
+-- script is idempotent.
+--
+-- These are a *snapshot*, not a history. The journal's job is to record what
+-- you did, and the equity curve is already derived from your trades — storing
+-- a balance row per poll would be a second, disagreeing source of truth for
+-- the same number, plus a table that grows forever.
+alter table public.broker_accounts
+  add column if not exists balance    numeric(14,2),
+  add column if not exists equity     numeric(14,2),
+  add column if not exists leverage   integer,
+  -- When the snapshot was taken, so the UI can say "as of 3 minutes ago"
+  -- rather than presenting a stale figure as current.
+  add column if not exists state_at   timestamptz;
+
+comment on column public.broker_accounts.equity is
+  'Balance plus floating P&L at the last sync. A snapshot — see state_at.';
+
+-- Still no credential column, and that has not changed. The bridge logs in
+-- with an INVESTOR password, which is read-only at the broker, and even that
+-- never leaves the machine running the bridge.

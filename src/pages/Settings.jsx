@@ -155,11 +155,13 @@ function AccountsTab({ trades, brokerAccounts }) {
       />
 
       <Note>
-        Syncing runs from <span className="mono">mt5_bridge/</span> on your own machine: it attaches
-        to your open MetaTrader terminal and pushes closed trades here. Nothing asks for a broker
-        password, and none is stored — a browser app that could read your credentials would be a way
-        to lose an account, not a journal. Cloud sync that works without your machine running needs a
-        server holding the secret, which is the broker-bridge decision still open in the plan.
+        Syncing runs from <span className="mono">mt5_bridge/</span> on your own machine, pushing
+        closed trades, open positions and your account balance here. Where it logs in, it uses your
+        broker’s <strong>investor</strong> password — read-only at the broker, so it can see your
+        account but cannot trade it. Nothing is stored in this database: a browser app that could
+        read your credentials would be a way to lose an account, not a journal. Sync that keeps
+        running while your machine is off still needs a server holding that credential, which is the
+        one broker decision left open in the plan.
         {streamerMode && ' Figures are blurred because Streamer Mode is on.'}
       </Note>
     </Section>

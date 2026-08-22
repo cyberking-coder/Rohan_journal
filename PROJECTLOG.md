@@ -16,7 +16,7 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 | 2 | Tools: Position Size Calculator, Forex Market Hours, tool shell | ✅ Done |
 | 3 | Journal split-pane + Trades page to spec | ✅ Done |
 | 4 | Dashboard widgets + Settings tabs & preferences | ✅ Done |
-| 5 | Broker accounts & auto-sync | 🟡 Done except credential-based cloud sync (vendor-gated) |
+| 5 | Broker accounts & auto-sync | 🟡 Done except sync while your machine is off (vendor-gated) |
 | 6 | Economic Calendar (Market) | ✅ Done — feed chosen (Apify / Investing.com) |
 | 7 | AI Report generation + weekly quota | ✅ Done — needs an Anthropic API key to run |
 | 8 | Backtesting (candle replay) | ✅ Done |
@@ -30,10 +30,12 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 
 These block or shape later phases. None block Phases 0–4.
 
-1. **Broker sync vendor** — still open, but no longer blocking: phase 5 shipped the
-   account model and self-hosted sync without it. What it still gates is sync that
-   works while your machine is off, which needs a server holding the credential
-   (MetaApi.cloud, a hosted bridge, or a custom EA + webhook).
+1. **Broker sync vendor** — narrowed further. The bridge now logs in with an MT5
+   **investor** password (read-only at the broker) and syncs open positions and
+   account balance as well as closed trades, so MetaApi buys nothing except
+   *running while your machine is off*. That still needs a host: a Windows VPS
+   (~$5–15/mo, since the MetaTrader5 Python package is Windows-only and needs the
+   terminal) or a hosted bridge. Not blocking anything.
 2. ~~**Economic calendar feed**~~ — **decided.** The Apify actor
    `pintostudio/economic-calendar-data-investing-com`, wired up as
    `--provider apify`. The provider seam is unchanged, so switching later is still
@@ -50,6 +52,53 @@ These block or shape later phases. None block Phases 0–4.
 ---
 
 ## Entries
+
+### 2026-08-13 — Investor-login sync: open positions and account balance
+
+Closes the last non-vendor gap in phase 5. Prompted by the observation that an
+MT5 **investor** password is read-only at the broker, which makes "this only
+reads" a property of the credential rather than a promise the script makes
+about itself.
+
+**Built**
+- Investor login in `mt5_bridge/`. The bridge can now log itself in rather than
+  attaching to a terminal someone left open — which is what makes unattended
+  operation possible. It prints which credential type it's using on startup.
+- `balance`, `equity`, `leverage` and `state_at` on `broker_accounts`, stamped
+  each sync. Added to `phase5.sql`, which is idempotent — **re-run it**.
+- Open-position sync via `positions_get()`, stored with `status='open'` and
+  keyed on the position ticket, so the close lands on the same row.
+- `reconcile_open()` — a position closed while the bridge was down, and outside
+  the lookback window, is looked up by ticket and closed out. With no history
+  at all it's left alone rather than given an invented exit price.
+- `mt5_bridge/test_sync.py` — 32 assertions against a stubbed terminal. The
+  MetaTrader5 package is Windows-only, so these paths could otherwise only be
+  tested by trading real money and waiting.
+
+**The bug this could easily have introduced**
+Floating P&L is not realised money. Three separate places would have counted
+it as such:
+- `stats.js` — every aggregate the Dashboard uses had no concept of `status`.
+  Nine of them now filter through `realised()`, inside the functions rather
+  than at the call sites so a new caller can't forget.
+- `brokerAccounts.js` — `addTrade` folded floating P&L into account totals and
+  counted a merely-green open position as a win.
+- `build_trades` in the bridge didn't set `status`. An upsert only writes the
+  columns it names, so a closed trade would have landed on the open row and
+  left it marked open forever, permanently excluded from every total.
+
+Each would have shown a number that was simply too good, with nothing visibly
+broken.
+
+**Verified**
+- 496 JS assertions and 32 Python ones passing; clean build.
+- `phase5.sql` re-run three times against PostgreSQL 16 on top of an existing
+  install; columns added, nothing else touched.
+- Browser: an account with two closed trades and one open position reads
+  $166.00 realised, 2 trades, 50% win rate, and `Open 1 ($480)` — the floating
+  figure kept visibly apart.
+
+---
 
 ### 2026-08-13 — Phase 8: backtesting
 

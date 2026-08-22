@@ -145,9 +145,38 @@ function AccountCard({ account: a, revealed, currency, onEdit, onToggleFavorite,
           </Sensitive>} />
         <Mini label="Trades" value={a.trades} />
         <Mini label="Win Rate" value={a.trades ? fmtPct(a.winRate, 1) : '—'} />
-        <Mini label="Open" value={a.open} />
+        <Mini label="Open" value={a.open ? (
+          <>
+            {a.open}{' '}
+            <Sensitive style={{ fontSize: 11, color: a.floating >= 0 ? 'var(--mint)' : 'var(--red)' }}>
+              ({formatMoney(a.floating, { currency: a.currency || currency, digits: 0 })})
+            </Sensitive>
+          </>
+        ) : 0} />
         <Mini label="Last Sync" value={a.derived ? '—' : fmtRelative(a.last_synced_at)} />
       </div>
+
+      {/* Balance and equity come from the broker, so they only exist once the
+          bridge has reported. Absent is shown as absent rather than as $0 —
+          a zero balance is a real and alarming thing to tell someone. */}
+      {(a.balance != null || a.equity != null) && (
+        <div style={{
+          display: 'flex', gap: 18, marginTop: 13, paddingTop: 13,
+          borderTop: '1px solid var(--stroke)', flexWrap: 'wrap', alignItems: 'baseline',
+        }}>
+          <Mini label="Balance" value={
+            <Sensitive>{a.balance != null ? formatMoney(a.balance, { currency: a.currency || currency }) : '—'}</Sensitive>} />
+          <Mini label="Equity" value={
+            <Sensitive style={{ color: a.equity != null && a.balance != null
+              ? (a.equity >= a.balance ? 'var(--mint)' : 'var(--red)') : undefined }}>
+              {a.equity != null ? formatMoney(a.equity, { currency: a.currency || currency }) : '—'}
+            </Sensitive>} />
+          {a.leverage ? <Mini label="Leverage" value={`1:${a.leverage}`} /> : null}
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-3)' }}>
+            as of {fmtRelative(a.state_at)}
+          </span>
+        </div>
+      )}
     </motion.div>
   )
 }
@@ -187,8 +216,9 @@ function AccountDialog({ initial, onCancel, onSave }) {
         {initial ? 'Edit account' : 'Add account'}
       </h3>
       <p style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6, marginBottom: 16 }}>
-        This records which account a trade belongs to. It never asks for a password —
-        the sync bridge runs on your own machine and attaches to your open terminal.
+        This records which account a trade belongs to. No password is asked for or
+        stored here — the sync bridge runs on your own machine, and where it does log
+        in, it uses your broker’s read-only investor credential.
       </p>
 
       <Field label="Name" error={errors.label}>
@@ -236,8 +266,8 @@ function RemoveDialog({ account, onCancel, onConfirm }) {
       <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.65, margin: '10px 0 18px' }}>
         {account.trades > 0 ? (
           <>
-            Its <strong>{account.trades}</strong>{' '}
-            {account.trades === 1 ? 'trade stays' : 'trades stay'} in your journal and become
+            Its <strong>{account.trades + (account.open || 0)}</strong>{' '}
+            {account.trades + (account.open || 0) === 1 ? 'trade stays' : 'trades stay'} in your journal and become
             unattributed — nothing is deleted. You can register the account again later.
           </>
         ) : 'This account has no trades yet.'}

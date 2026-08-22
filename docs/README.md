@@ -100,8 +100,11 @@ laptop can read too. Storing live broker credentials there turns a journal into 
 way to lose an account. Doing it safely needs a server the browser cannot read
 from — an Edge Function or hosted bridge holding the secret, written once and
 never returned — which is exactly the vendor decision still open. Until then,
-sync runs from `mt5_bridge/` on the user's own machine, attached to a terminal
-they already logged into, and no password is transmitted or stored anywhere.
+sync runs from `mt5_bridge/` on the user's own machine using the broker's
+**investor** password — read-only at the broker, so the bridge can see the
+account but cannot trade it — and nothing is stored in the database. Open
+positions and account balance sync too; only "keeps running while your machine
+is off" still needs a host.
 
 ### Phase 6 — Economic Calendar (Market) ✅ **Done**
 - ✅ `economic_events` table, read-only from the browser by design — a client that could write here could feed every user false economic data. `supabase/phase6.sql`.

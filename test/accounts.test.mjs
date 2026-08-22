@@ -78,7 +78,9 @@ eq('Derived group is flagged', derivedManual.derived, true)
 const derivedMt5 = combined.find((a) => a.id === 'derived:mt5')
 eq('Unattributed mt5 trades group separately', derivedMt5.trades, 1)
 // Attributed trades must not be double-counted into a derived bucket.
-eq('No double counting', combined.reduce((s, a) => s + a.trades, 0), trades.length)
+// `trades` counts closed positions only, so the total is closed + open —
+// every trade lands in exactly one account and exactly one of the two buckets.
+eq('No double counting', combined.reduce((s, a) => s + a.trades + a.open, 0), trades.length)
 eq('Open positions tracked', combined.find((a) => a.id === 'acc-2').open, 1)
 eq('Win rate', acc1.winRate, 50)
 eq('No accounts registered still groups everything', combineAccounts([], trades).length, 2)
@@ -107,6 +109,35 @@ eq('Unknown platform rejected', validateAccount({ label: 'Live', platform: 'wat'
 eq('Rejects a pasted secret', validateAccount({ label: 'Live', account_number: 'hunter2!@#$' }).valid, false)
 eq('Number is optional', validateAccount({ label: 'Live', account_number: '' }).valid, true)
 eq('Platform label', platformLabel('mt5'), 'MetaTrader 5')
+
+
+console.log('\n— open positions are kept apart from realised results —')
+// Floating P&L hasn't landed and can still reverse. Folding it into the
+// account total overstates what the account has made; counting a merely-green
+// position as a win inflates the win rate on top of that.
+const withOpen = combineAccounts(
+  [{ id: 'acct', label: 'Live', balance: 5000, equity: 5200, leverage: 100, state_at: '2026-08-12T10:00:00Z' }],
+  [
+    { broker_account_id: 'acct', pnl: 100, status: 'closed', traded_at: '2026-08-12T09:00:00Z' },
+    { broker_account_id: 'acct', pnl: -40, status: 'closed', traded_at: '2026-08-12T09:30:00Z' },
+    { broker_account_id: 'acct', pnl: 9999, status: 'open', traded_at: '2026-08-12T10:00:00Z' },
+  ],
+)[0]
+eq('realised P&L excludes floating', withOpen.pnl, 60)
+eq('floating reported separately', withOpen.floating, 9999)
+eq('trade count is closed only', withOpen.trades, 1 + 1)
+eq('open counted on its own', withOpen.open, 1)
+// 1 win of 2 closed. Counting the green open position would read 66.7%.
+eq('win rate ignores open positions', Math.round(withOpen.winRate * 10) / 10, 50)
+// Broker-reported state has to survive the merge or the panel can't show it.
+eq('balance carried through', withOpen.balance, 5000)
+eq('equity carried through', withOpen.equity, 5200)
+eq('leverage carried through', withOpen.leverage, 100)
+
+// An account with nothing open must not report a phantom floating figure.
+const noneOpen = combineAccounts([{ id: 'b', label: 'B' }],
+  [{ broker_account_id: 'b', pnl: 10, status: 'closed', traded_at: '2026-08-12T09:00:00Z' }])[0]
+eq('no open positions, no floating', noneOpen.floating, 0)
 
 console.log(fails ? `\n${fails} FAILED` : '\nAll assertions passed.')
 process.exit(fails ? 1 : 0)
