@@ -5,7 +5,7 @@ import {
   Tooltip, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
 import { useTheme } from '../lib/theme'
-import Money from './Money'
+import Money, { Amount } from './Money'
 import { TRADING_SESSIONS, cumulativeEquity, drawdownSeries } from '../lib/analytics'
 
 // Same reasoning as charts.jsx: Recharts writes these onto SVG presentation
@@ -43,12 +43,17 @@ function Tip({ children }) {
 }
 
 const money = (v) => `${v < 0 ? '-' : ''}$${Math.abs(Math.round(v)).toLocaleString()}`
+// A shared view can express results as risk multiples instead of currency.
+// The axis and tooltip have to follow, or the chart quietly re-prints the
+// account size the owner asked to hide.
+const rMultiple = (v) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}R`
+const amountFmt = (unit) => (unit === 'R' ? rMultiple : money)
 
 // ---------------------------------------------------------------------------
 // Equity curve, with the Drawdown view behind a toggle
 // ---------------------------------------------------------------------------
 
-export function EquityDrawdown({ trades }) {
+export function EquityDrawdown({ trades, unit = 'money' }) {
   const [mode, setMode] = useState('equity')
   const c = usePalette()
   const mask = useMask()
@@ -64,6 +69,7 @@ export function EquityDrawdown({ trades }) {
 
   const isDrawdown = mode === 'drawdown'
   const stroke = isDrawdown ? c.red : c.mint
+  const fmt = amountFmt(unit)
 
   return (
     <div>
@@ -94,13 +100,13 @@ export function EquityDrawdown({ trades }) {
             <CartesianGrid stroke={c.grid} vertical={false} />
             <XAxis dataKey="label" tick={{ fill: c.axis, fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={44} />
             <YAxis tick={{ fill: c.axis, fontSize: 11 }} axisLine={false} tickLine={false}
-              tickFormatter={mask.axis(money)} width={64} />
+              tickFormatter={mask.axis(fmt)} width={64} />
             <ReferenceLine y={0} stroke={c.axis} strokeDasharray="3 3" />
             <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
               <Tip>
                 <div style={{ color: 'var(--text-3)', marginBottom: 3 }}>{label}</div>
                 <div style={{ color: stroke }}>
-                  {isDrawdown ? 'Drawdown' : 'Equity'}&nbsp;&nbsp;{mask.text(money(payload[0].value))}
+                  {isDrawdown ? 'Drawdown' : 'Equity'}&nbsp;&nbsp;{mask.text(fmt(payload[0].value))}
                 </div>
               </Tip>
             ) : null} />
@@ -114,7 +120,7 @@ export function EquityDrawdown({ trades }) {
 }
 
 /** The eight-figure strip beneath the equity curve. */
-export function MetricStrip({ items }) {
+export function MetricStrip({ items, unit = 'money' }) {
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(108px, 1fr))',
@@ -128,7 +134,7 @@ export function MetricStrip({ items }) {
           </div>
           <div className="mono" style={{ fontSize: 14.5, fontWeight: 600, marginTop: 4, color: m.color || 'var(--text)' }}>
             {/* Money masks itself; counts and percentages stay readable. */}
-            {m.money !== undefined ? <Money value={m.money} digits={0} colored={m.colored} /> : m.value}
+            {m.money !== undefined ? <Amount value={m.money} unit={unit} digits={0} colored={m.colored} /> : m.value}
           </div>
         </div>
       ))}
@@ -177,7 +183,7 @@ export function DistributionChart({ buckets }) {
  * components. Bars are drawn from a shared centre so losses read as losses
  * rather than as short wins.
  */
-export function ComparisonBars({ rows, labelKey = 'label', emptyMessage = 'Nothing to show yet.' }) {
+export function ComparisonBars({ rows, labelKey = 'label', unit = 'money', emptyMessage = 'Nothing to show yet.' }) {
   const active = rows.filter((r) => r.count > 0)
   if (!active.length) return <EmptyChart height={140} message={emptyMessage} />
 
@@ -212,7 +218,7 @@ export function ComparisonBars({ rows, labelKey = 'label', emptyMessage = 'Nothi
             </div>
 
             <div className="mono" style={{ width: 74, flexShrink: 0, fontSize: 11.5, fontWeight: 600, textAlign: 'right' }}>
-              {r.count ? <Money value={r.pnl} digits={0} colored /> : ''}
+              {r.count ? <Amount value={r.pnl} unit={unit} digits={unit === 'R' ? 1 : 0} colored /> : ''}
             </div>
           </div>
         )

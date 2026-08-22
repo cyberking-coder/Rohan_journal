@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { PageHeader } from '../components/common'
 import { Sensitive } from '../components/Money'
 import { useAuth } from '../lib/AuthContext'
+import ShareLinks from '../components/ShareLinks'
 import { usePrefs } from '../lib/theme'
 import { useQueryParam } from '../lib/router'
 import BrokerAccounts from '../components/BrokerAccounts'
@@ -15,6 +16,7 @@ import { fmtPct } from '../lib/stats'
 const TABS = [
   { key: 'profile', label: 'Profile' },
   { key: 'accounts', label: 'MT5 / MT4' },
+  { key: 'sharing', label: 'Sharing' },
   { key: 'preferences', label: 'Settings' },
   { key: 'billing', label: 'Billing' },
   { key: 'security', label: 'Security' },
@@ -45,6 +47,7 @@ export default function Settings({ trades = [], onClearAll, brokerAccounts }) {
       <motion.div key={active} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
         {active === 'profile' && <ProfileTab />}
         {active === 'accounts' && <AccountsTab trades={trades} brokerAccounts={brokerAccounts} />}
+        {active === 'sharing' && <SharingTab brokerAccounts={brokerAccounts} />}
         {active === 'preferences' && <PreferencesTab trades={trades} onClearAll={onClearAll} />}
         {active === 'billing' && <BillingTab />}
         {active === 'security' && <SecurityTab />}
@@ -96,6 +99,30 @@ function ProfileCard() {
   )
 }
 
+/* ── Sharing tab ────────────────────────────────────────────────────────── */
+
+function SharingTab({ brokerAccounts }) {
+  const { user } = useAuth()
+  const { accounts = [] } = brokerAccounts ?? {}
+
+  return (
+    <Section
+      title="Shared views"
+      subtitle="Read-only links to your performance. You choose what each one shows, and can revoke it at any time."
+    >
+      <ShareLinks userId={user?.id ?? null} accounts={accounts} />
+
+      <Note>
+        A link is a bearer token: anyone holding it sees what you enabled, without
+        signing in. Nothing else is reachable through it — not your email, not your
+        broker account numbers, not your other accounts, and not any section you left
+        off. Revoking is immediate, but it cannot un-see what was already read, so
+        prefer a short expiry for anything sensitive.
+      </Note>
+    </Section>
+  )
+}
+
 /* ── Profile tab ────────────────────────────────────────────────────────── */
 
 function ProfileTab() {
@@ -116,7 +143,7 @@ function ProfileTab() {
       </Row>
       <Toggle
         label="Public profile"
-        description="Allows a shared read-only view of your performance. Sharing itself arrives with Trader POV in phase 9."
+        description="A hint for future community features. Share links are managed on the Sharing tab and work regardless of this setting."
         checked={profileVisibility === 'public'}
         onChange={(on) => setPref('profileVisibility', on ? 'public' : 'private')}
       />

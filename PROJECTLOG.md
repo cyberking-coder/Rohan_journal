@@ -20,7 +20,7 @@ Newest entries at the top. See `docs/README.md` for the phase plan.
 | 6 | Economic Calendar (Market) | ✅ Done — feed chosen (Apify / Investing.com) |
 | 7 | AI Report generation + weekly quota | ✅ Done — needs an Anthropic API key to run |
 | 8 | Backtesting (candle replay) | ✅ Done |
-| 9 | Trader POV / shared read-only dashboards | ⏸ Not started |
+| 9 | Trader POV / shared read-only dashboards | ✅ Done |
 | 10 | Community (lounges, leaderboard, affiliate) | ⏸ Not started — scope not confirmed |
 | 11 | Billing (Stripe tiers) & Security tab | ⏸ Not started — scope not confirmed |
 
@@ -52,6 +52,57 @@ These block or shape later phases. None block Phases 0–4.
 ---
 
 ## Entries
+
+### 2026-08-13 — Phase 9: shared read-only dashboards
+
+The one feature that deliberately shows data to someone who owns none of it,
+so it got the most careful design of anything so far.
+
+**The shape of the solution**
+Every other table answers "can this signed-in user see their own row?". This
+asks the opposite. The tempting implementation — a policy on `trades` that also
+allows reads when a valid code is present — reopens the hole the rest of the
+schema exists to close: one mistake there and every trade in the database is
+public.
+
+So `trades` is not touched at all. `shared_dashboards` is owner-only like
+everything else, and the only thing permitted to read another user's rows is
+one `SECURITY DEFINER` function. One place where the rules live, one thing to
+audit, and no anonymous read policy on anything.
+
+**Deviating from the spec, deliberately**
+The spec sketches `VIEW-XXXXXX`. Six characters is ~2 billion, which sounds
+like plenty and isn't — guessing over HTTP works through that in days, and
+every hit is somebody's entire trading history. These links are copied, never
+typed, so length is free: `VIEW-XXXX-XXXX-XXXX-XXXX` is 2^80, from an alphabet
+with no lookalike characters.
+
+**Hide amounts**
+Results in R multiples — each trade divided by the owner's average loss —
+instead of currency. Win rate, consistency and drawdown stay fully visible;
+account size doesn't. This needed a new `<Amount>` component and a `unit` prop
+threaded through the charts, because rendering an R value through `<Money>`
+stamps a currency symbol on it and undoes the entire point.
+
+**Warnings where the decision is made**
+"Share my results" and "publish my private notes to anyone holding a URL,
+forever" are easy to confuse. The create form says so inline, including the
+non-obvious one: AI reports quote the journal, so enabling reports leaks notes
+even with the journal section off.
+
+**Verified**
+- 16 new checks in the isolation suite (54 total, zero failures), covering:
+  wrong, revoked and expired codes all returning the same null; only the
+  owner's trades appearing; the journal withheld unless enabled; no owner
+  identity and no raw row ids in the payload; and B unable to list A's links.
+- Both negative controls fail correctly: forcing `wants_journal := true`
+  trips "journal withheld unless enabled", and dropping the owner filter trips
+  "only the owner's symbols".
+- Browser: money view shows 83 `$`; the R view shows **zero** `$` and 83 R
+  values, including chart axes; the viewer page has no sidebar in any state,
+  so there is no path into the app.
+
+---
 
 ### 2026-08-13 — Security & multi-tenancy audit
 

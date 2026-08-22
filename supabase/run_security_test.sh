@@ -69,7 +69,7 @@ create or replace function storage.foldername(name text) returns text[]
 SQL
 
 echo "Applying migrations…"
-for f in schema.sql storage.sql mt5.sql phase0.sql phase3.sql phase4.sql phase5.sql phase6.sql phase7.sql phase8.sql; do
+for f in schema.sql storage.sql mt5.sql phase0.sql phase3.sql phase4.sql phase5.sql phase6.sql phase7.sql phase8.sql phase9.sql; do
   printf '  %-14s' "$f"
   if $PSQL -f "$HERE/$f" >/dev/null 2>&1; then echo "ok"; else echo "FAILED"; $PSQL -f "$HERE/$f"; exit 1; fi
 done

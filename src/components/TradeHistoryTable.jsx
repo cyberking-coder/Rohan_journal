@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { net } from '../lib/stats'
-import Money from './Money'
+import Money, { Amount } from './Money'
 import { closeTime, openTime } from '../lib/analytics'
 import { isSynced, sourceLabel, tradeSummaryText } from '../lib/accounts'
 import { usePrefs } from '../lib/theme'
@@ -9,7 +9,7 @@ import { formatDateTime } from '../lib/format'
 
 // The Trades page history table, laid out per the spec: stacked open/close
 // timestamps, direction badge, prices, size, P&L, source, and row actions.
-export default function TradeHistoryTable({ trades, onDelete, onEdit }) {
+export default function TradeHistoryTable({ trades, onDelete, onEdit, unit = 'money' }) {
   const [copiedId, setCopiedId] = useState(null)
   // Timestamps render in the user's chosen timezone (Settings -> Timezone).
   const { timezone } = usePrefs()
@@ -81,7 +81,7 @@ export default function TradeHistoryTable({ trades, onDelete, onEdit }) {
                 <td style={{ ...cell, fontFamily: 'var(--mono)', fontSize: 13 }}>{t.qty ?? '—'}</td>
 
                 <td style={{ ...cell, fontFamily: 'var(--mono)', fontSize: 13.5, fontWeight: 600 }}>
-                  <Money value={pnl} colored />
+                  <Amount value={pnl} unit={unit} colored />
                 </td>
 
                 <td style={cell}>

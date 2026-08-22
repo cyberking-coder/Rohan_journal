@@ -96,6 +96,27 @@ insert into public.candles (user_id, symbol, timeframe, t, o, h, l, c) values
 insert into public.economic_events (event_at, currency, title) values
   (now(), 'USD', 'CPI YoY');
 
+-- Two share links owned by A: one live, one revoked. Plus an expired one.
+insert into public.shared_dashboards (owner_user_id, code, label, sections, expires_at, revoked) values
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'VIEW-LIVE', 'A live share',
+   array['overview','trades','journal'], null, false),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'VIEW-REVOKED', 'A revoked share',
+   array['overview','trades'], null, true),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'VIEW-EXPIRED', 'A expired share',
+   array['overview','trades'], now() - interval '1 day', false),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'VIEW-NOJOURNAL', 'No journal',
+   array['overview'], null, false),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'VIEW-HIDDEN', 'Amounts hidden',
+   array['overview','trades'], null, false);
+
+update public.shared_dashboards set hide_amounts = true where code = 'VIEW-HIDDEN';
+
+-- Give A a journalled, losing trade so the journal-gating and the R-unit
+-- conversion have something real to work on.
+insert into public.trades (user_id, symbol, side, pnl, fees, traded_at, pre_trade_analysis, notes)
+values ('aaaaaaaa-0000-0000-0000-000000000001', 'XAUUSD', 'Long', -200, 0, now(),
+        'SECRET SETUP', 'SECRET NOTES');
+
 -- A screenshot belonging to each user, under their own folder.
 insert into storage.objects (bucket_id, name) values
   ('screenshots', 'aaaaaaaa-0000-0000-0000-000000000001/chart-a.png'),
@@ -109,7 +130,9 @@ select set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-0000-0000-000000000001
 select set_config('request.jwt.claim.role', 'authenticated', false);
 
 -- Each table: A must see exactly its own row, and none of B's.
-select record('trades: sees own',        count(*) = 1, 'saw ' || count(*)) from public.trades;
+-- A owns two: the seeded one and the journalled XAUUSD trade the sharing
+-- checks need.
+select record('trades: sees own',        count(*) = 2, 'saw ' || count(*)) from public.trades;
 select record('trades: not B''s',        count(*) = 0, 'saw ' || count(*)) from public.trades where user_id = 'bbbbbbbb-0000-0000-0000-000000000002';
 
 select record('broker_accounts: sees own', count(*) = 1, 'saw ' || count(*)) from public.broker_accounts;
@@ -274,6 +297,18 @@ exception when others then
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- Act as user B — the other tenant
+-- ---------------------------------------------------------------------------
+select set_config('request.jwt.claim.sub', 'bbbbbbbb-0000-0000-0000-000000000002', false);
+
+select record('B: sees only own trades', count(*) = 1, 'saw ' || count(*)) from public.trades;
+
+-- The code IS the secret. Listing another user's share links would hand over
+-- every shared dashboard in the database.
+select record('B: cannot see A''s share links', count(*) = 0, 'saw ' || count(*))
+  from public.shared_dashboards;
+
+-- ---------------------------------------------------------------------------
 -- Act as an anonymous visitor — nothing should be readable.
 -- ---------------------------------------------------------------------------
 select set_config('request.jwt.claim.sub', '', false);
@@ -286,6 +321,67 @@ select record('anon: no reports',  count(*) = 0, 'saw ' || count(*)) from public
 select record('anon: no calendar', count(*) = 0, 'saw ' || count(*)) from public.economic_events;
 select record('anon: no screenshots', count(*) = 0, 'saw ' || count(*))
   from storage.objects where bucket_id = 'screenshots';
+select record('anon: cannot list share links', count(*) = 0, 'saw ' || count(*))
+  from public.shared_dashboards;
+
+-- ── The share function, called anonymously ────────────────────────────────
+-- This is the one path by which a stranger reads someone else's data, so it
+-- gets the most attention.
+select record('share: a valid code returns data',
+  public.shared_view('VIEW-LIVE') is not null, '');
+select record('share: returns the owner''s trades',
+  jsonb_array_length(public.shared_view('VIEW-LIVE')->'trades') > 0,
+  jsonb_array_length(public.shared_view('VIEW-LIVE')->'trades')::text || ' trades');
+
+-- Only the owner's. If another user's rows ever appear here, sharing has
+-- become a database-wide leak.
+select record('share: only the owner''s symbols',
+  not exists (
+    select 1 from jsonb_array_elements(public.shared_view('VIEW-LIVE')->'trades') t
+    where t->>'symbol' = 'GBPJPY'   -- that one belongs to B
+  ), '');
+
+select record('share: a wrong code returns nothing',
+  public.shared_view('VIEW-DOES-NOT-EXIST') is null, '');
+select record('share: a revoked code returns nothing',
+  public.shared_view('VIEW-REVOKED') is null, '');
+select record('share: an expired code returns nothing',
+  public.shared_view('VIEW-EXPIRED') is null, '');
+select record('share: an empty code returns nothing',
+  public.shared_view('') is null, '');
+
+-- Sections are enforced in the function, not merely hidden in the UI. A
+-- viewer who inspects the response must not find the journal in it.
+select record('share: journal withheld unless enabled',
+  not exists (
+    select 1 from jsonb_array_elements(public.shared_view('VIEW-NOJOURNAL')->'trades') t
+    where t->>'pre_trade_analysis' is not null or t->>'notes' is not null
+  ), '');
+-- Called with the literal code: an anonymous viewer has no way to look one up
+-- from the table, which is exactly the property being relied on.
+select record('share: journal present when enabled',
+  exists (
+    select 1 from jsonb_array_elements(public.shared_view('VIEW-LIVE')->'trades') t
+    where t->>'pre_trade_analysis' = 'SECRET SETUP'
+  ), 'enabled but not returned');
+
+-- Never returned, whatever the sections say.
+select record('share: no owner identity in the payload',
+  (public.shared_view('VIEW-LIVE')::text) not like '%aaaaaaaa-0000%', '');
+select record('share: no raw trade ids',
+  not exists (
+    select 1 from jsonb_array_elements(public.shared_view('VIEW-LIVE')->'trades') t
+    join public.trades tr on tr.id::text = t->>'id'
+  ), '');
+
+-- hide_amounts must actually change the numbers, not just label them.
+select record('share: amounts hidden are not currency',
+  (select (t->>'pnl')::numeric from jsonb_array_elements(
+      public.shared_view('VIEW-HIDDEN')->'trades') t
+    where t->>'symbol' = 'XAUUSD' limit 1) <> -200,
+  'still showing the raw figure');
+select record('share: hidden view is flagged',
+  (public.shared_view('VIEW-HIDDEN')->>'unit') = 'R', '');
 
 reset role;
 
