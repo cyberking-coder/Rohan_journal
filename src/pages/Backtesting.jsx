@@ -15,6 +15,8 @@ import { COST_PRESETS, DEFAULT_PRESET, costSummary } from '../lib/execution'
 import { useAuth } from '../lib/AuthContext'
 import { useBacktestSessions } from '../lib/useBacktestSessions'
 import Comparison from '../components/Comparison'
+import { analyse, confluence } from '../lib/ict'
+import IctPanel from '../components/IctPanel'
 
 // How many candles are visible at once. Enough context to read structure
 // without shrinking bodies to a smear.
@@ -82,6 +84,19 @@ export default function Backtesting({ trades = [] }) {
   )
 
   const costs_ = useMemo(() => costSummary(closedWithCosts(closed)), [closed])
+
+  const [showIct, setShowIct] = useState(false)
+  // Computed against the FULL series up to the cursor, not the visible window:
+  // a gap or a level formed before the window still governs price now, and
+  // recomputing from 120 bars would make the detectors' answers depend on how
+  // much of the chart happens to be on screen. `analyse` never reads past the
+  // cursor — see src/lib/ict.js.
+  const picture = useMemo(
+    () => (showIct && candles.length ? analyse(candles, cursor, { strength: 2, htf: [240, 60] }) : null),
+    [showIct, candles, cursor],
+  )
+  const align = useMemo(() => (picture ? confluence(picture) : null), [picture])
+  const windowStart = Math.max(0, cursor - WINDOW + 1)
 
   // The session being compared: whichever the user picked, else the most
   // recent one for the symbol on screen, else the most recent at all. Falling
@@ -340,7 +355,7 @@ export default function Backtesting({ trades = [] }) {
                 {' · '}<span style={{ fontWeight: 600 }}>{current.c}</span>
               </span>
             )}>
-            <CandleChart candles={visible} positions={open}
+            <CandleChart candles={visible} positions={open} ict={picture} offset={windowStart}
               markers={closed.map((t) => ({ at: t.closedAt, price: t.exit, win: t.pnl > 0 }))} />
 
             <Controls
@@ -369,7 +384,20 @@ export default function Backtesting({ trades = [] }) {
           </Panel>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginBottom: 14 }}>
-            <Panel title="Execution Costs" delay={0.035} style={{ marginBottom: 14 }}
+            <Panel title="ICT / SMC" delay={0.03} style={{ marginBottom: 14 }}
+            right={
+              <button onClick={() => setShowIct((v) => !v)}
+                style={{
+                  padding: '4px 11px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                  border: `1px solid ${showIct ? 'var(--mint)' : 'var(--stroke)'}`,
+                  color: showIct ? 'var(--mint)' : 'var(--text-3)',
+                  background: showIct ? 'rgba(47,212,138,0.09)' : 'transparent',
+                }}>{showIct ? 'on' : 'off'}</button>
+            }>
+            <IctPanel picture={picture} align={align} enabled={showIct} />
+          </Panel>
+
+          <Panel title="Execution Costs" delay={0.035} style={{ marginBottom: 14 }}
             right={<span style={{ fontSize: 10.5, color: 'var(--text-3)' }}>applied to every fill</span>}>
             <CostControls costs={costs} onChange={setCosts} />
           </Panel>

@@ -42,7 +42,11 @@ than the PRD asks · **missing** = nothing in the repo.
    `src/lib/comparison.js`.* Saved replay sessions compared against live
    trades on the same symbol, with the divergence diagnosed rather than
    merely tabulated, and every claim carrying how much evidence it rests on.
-6. **§55–59 ICT/SMC engines** — FVG, liquidity, HTF/LTF alignment detection.
+6. **§55–59 ICT/SMC engines** — *now built, see `src/lib/ict.js`.* Swings,
+   FVGs with fill/invalidation, equal highs/lows, PDH/PDL, sweeps vs breaks,
+   BOS/CHOCH, premium/discount, and HTF bias from closed candles only. The
+   §60 look-ahead rule is verified structurally by the test suite rather than
+   asserted in a comment.
 7. **§34–40 Market-data architecture** — 1-minute canonical bars, Parquet, R2,
    a provider abstraction, an `instruments` table and symbol mapping.
 8. **§71 Worker/queue system**, **§84 billing**, **§86 admin**, **§83 privacy

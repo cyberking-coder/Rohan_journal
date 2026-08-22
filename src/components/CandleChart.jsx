@@ -14,6 +14,10 @@ import { useTheme } from '../lib/theme'
  */
 export default function CandleChart({
   candles, positions = [], markers = [], height = 380, pending = null,
+  // ICT overlays. Passed in already computed rather than derived here, so the
+  // chart never sees candles the replay cursor hasn't revealed — the
+  // look-ahead boundary stays in one place (src/lib/ict.js).
+  ict = null, offset = 0,
 }) {
   const { theme } = useTheme()
   const dark = theme !== 'light'
@@ -104,6 +108,10 @@ export default function CandleChart({
   }
 
   const { x, y, bw } = view
+  // Detector indices are absolute into the full series; the chart draws a
+  // window. Anything before the window is clamped to its left edge so a gap
+  // that started off-screen still shows where it sits in price.
+  const xi = (i) => x(Math.max(0, Math.min(candles.length - 1, i - offset)))
   // Below about 3px a body is thinner than its own wick; drawing the wick
   // alone reads better than a smear of overlapping rectangles.
   const bodyW = Math.max(1, Math.min(bw * 0.7, 14))
@@ -113,6 +121,56 @@ export default function CandleChart({
     <div ref={wrapRef} style={{ width: '100%' }}>
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={height}
       style={{ display: 'block', overflow: 'visible' }}>
+      {/* ICT overlays, drawn under the candles so price stays readable. An
+          overlay that obscures the thing it annotates is worse than none. */}
+      {ict && (
+        <g>
+          {ict.openFvgs?.map((g) => {
+            const top = y(g.top)
+            const bottom = y(g.bottom)
+            const left = xi(g.index)
+            return (
+              <g key={g.id}>
+                <rect
+                  x={left} y={Math.min(top, bottom)}
+                  width={Math.max(2, W - padR - left)} height={Math.abs(bottom - top)}
+                  fill={g.direction === 'bullish' ? c.up : c.down}
+                  opacity={g.status === 'filled' ? 0.06 : 0.13}
+                />
+              </g>
+            )
+          })}
+
+          {ict.levels?.filter((l) => l.status !== 'broken').map((l, i) => (
+            <g key={`${l.type}-${i}`}>
+              <line
+                x1={xi(l.confirmedAt)} x2={W - padR} y1={y(l.price)} y2={y(l.price)}
+                stroke={c.axis} strokeWidth={1}
+                strokeDasharray={l.status === 'swept' ? '1 3' : '4 3'}
+                opacity={l.status === 'swept' ? 0.45 : 0.75}
+              />
+              <text x={xi(l.confirmedAt) + 4} y={y(l.price) - 4} fill={c.axis} fontSize={9}>
+                {l.type.replace('-', ' ')}{l.status === 'swept' ? ' · swept' : ''}
+              </text>
+            </g>
+          ))}
+
+          {ict.structure?.map((e, i) => (
+            <g key={`st-${i}`}>
+              <line
+                x1={xi(e.index) - bw} x2={xi(e.index) + bw} y1={y(e.price)} y2={y(e.price)}
+                stroke={e.direction === 'bullish' ? c.up : c.down} strokeWidth={1.5}
+              />
+              <text
+                x={xi(e.index)} y={y(e.price) + (e.direction === 'bullish' ? -6 : 12)}
+                fill={e.direction === 'bullish' ? c.up : c.down}
+                fontSize={8.5} fontWeight={700} textAnchor="middle"
+              >{e.kind.toUpperCase()}</text>
+            </g>
+          ))}
+        </g>
+      )}
+
       {/* Price grid */}
       {Array.from({ length: gridLines }, (_, i) => {
         const price = view.lo + ((view.hi - view.lo) * i) / (gridLines - 1)
