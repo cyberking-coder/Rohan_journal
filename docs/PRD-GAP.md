@@ -38,7 +38,10 @@ than the PRD asks · **missing** = nothing in the repo.
 4. **§53 Execution model** — *now built, see `src/lib/execution.js`.* Spread,
    commission, slippage and swap, with a breakdown showing where the money
    went and a flag when costs turn a winner into a loser.
-5. **§67 Backtest-vs-live comparison** — the payoff for 4.
+5. **§67 Backtest-vs-live comparison** — *now built, see
+   `src/lib/comparison.js`.* Saved replay sessions compared against live
+   trades on the same symbol, with the divergence diagnosed rather than
+   merely tabulated, and every claim carrying how much evidence it rests on.
 6. **§55–59 ICT/SMC engines** — FVG, liquidity, HTF/LTF alignment detection.
 7. **§34–40 Market-data architecture** — 1-minute canonical bars, Parquet, R2,
    a provider abstraction, an `instruments` table and symbol mapping.

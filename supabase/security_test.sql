@@ -324,6 +324,11 @@ select record('B: cannot see A''s share links', count(*) = 0, 'saw ' || count(*)
 select record('B: sees only own funded account', count(*) = 1, 'saw ' || count(*))
   from public.funded_accounts;
 
+-- A saved backtest is a strategy. Reading someone else's is reading their
+-- edge, which is the one thing a trader would least like shared.
+select record('B: sees only own backtests', count(*) = 1, 'saw ' || count(*))
+  from public.backtest_sessions;
+
 -- Writing another user's challenge would let an attacker move somebody's
 -- profit target or loss limit, which is a quiet way to make their dashboard
 -- lie to them about whether they still have an account.
@@ -375,6 +380,8 @@ select record('anon: cannot list share links', count(*) = 0, 'saw ' || count(*))
   from public.shared_dashboards;
 select record('anon: no funded accounts', count(*) = 0, 'saw ' || count(*))
   from public.funded_accounts;
+select record('anon: no backtests', count(*) = 0, 'saw ' || count(*))
+  from public.backtest_sessions;
 
 -- ── The share function, called anonymously ────────────────────────────────
 -- This is the one path by which a stranger reads someone else's data, so it

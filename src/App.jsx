@@ -102,7 +102,7 @@ function Journalized({ userId }) {
             {view === 'market' && <Market />}
             {view === 'ai-report' && <AIReport trades={trades} />}
             {view === 'funded' && <Funded trades={trades} brokerAccounts={brokerAccounts.accounts} />}
-            {view === 'backtesting' && <Backtesting />}
+            {view === 'backtesting' && <Backtesting trades={trades} />}
             {view === 'tools' && <Tools />}
             {view === 'settings' && <Settings trades={trades} onClearAll={clearAllTrades} brokerAccounts={brokerAccounts} />}
             {!current?.ready && <ComingSoon view={current} />}

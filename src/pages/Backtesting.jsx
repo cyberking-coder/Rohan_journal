@@ -12,6 +12,9 @@ import {
 import { TF_ORDER, useCandleSets, useCandles } from '../lib/useCandles'
 import { CostBreakdown, CostControls } from '../components/CostPanel'
 import { COST_PRESETS, DEFAULT_PRESET, costSummary } from '../lib/execution'
+import { useAuth } from '../lib/AuthContext'
+import { useBacktestSessions } from '../lib/useBacktestSessions'
+import Comparison from '../components/Comparison'
 
 // How many candles are visible at once. Enough context to read structure
 // without shrinking bodies to a smear.
@@ -24,7 +27,11 @@ const SPEEDS = [
   { label: '10×', ms: 80 },
 ]
 
-export default function Backtesting() {
+export default function Backtesting({ trades = [] }) {
+  const { user } = useAuth()
+  const { sessions, save: saveSession, remove: removeSession, ready: sessionsReady } = useBacktestSessions(user?.id)
+  const [compareId, setCompareId] = useState(null)
+  const [saveState, setSaveState] = useState(null)
   // Two sources of candles: whatever the bridge has uploaded, or a file. The
   // uploaded path is the normal one — it needs no file and can switch
   // timeframe mid-session.
@@ -75,6 +82,18 @@ export default function Backtesting() {
   )
 
   const costs_ = useMemo(() => costSummary(closedWithCosts(closed)), [closed])
+
+  // The session being compared: whichever the user picked, else the most
+  // recent one for the symbol on screen, else the most recent at all. Falling
+  // back rather than showing nothing means the panel is useful immediately
+  // after a save, without a second click.
+  const comparing = useMemo(() => {
+    if (compareId) return sessions.find((s) => s.id === compareId) || null
+    const sym = (symbol || meta?.symbol || '').toUpperCase()
+    return sessions.find((s) => (s.symbol || '').toUpperCase() === sym) || sessions[0] || null
+  }, [compareId, sessions, symbol, meta])
+
+
 
   // ── Advancing ────────────────────────────────────────────────────────────
   // Just moves the cursor; the fills follow from `replay` above.
@@ -212,6 +231,26 @@ export default function Backtesting() {
   const rows = useMemo(() => toTradeRows(closed), [closed])
   const stats = useMemo(() => computeAnalytics(rows, rows), [rows])
   const ambiguity = useMemo(() => ambiguityReport(closed), [closed])
+
+  const persist = useCallback(async () => {
+    if (!closed.length) return
+    setSaveState('saving')
+    const saved = await saveSession({
+      name: `${symbol || meta?.file || 'Replay'} · ${new Date().toLocaleDateString()}`,
+      symbol: symbol || meta?.symbol || 'UNKNOWN',
+      timeframe: timeframe || meta?.timeframe || null,
+      periodStart: candles.length ? new Date(candles[0].t).toISOString() : null,
+      periodEnd: candles.length ? new Date(candles[Math.min(cursor, candles.length - 1)].t).toISOString() : null,
+      candleCount: candles.length,
+      sourceFile: meta?.file || null,
+      trades: closed,
+      ambiguousFills: ambiguity.count,
+      costs,
+    })
+    setSaveState(saved ? 'saved' : 'error')
+    if (saved) setCompareId(saved.id)
+    setTimeout(() => setSaveState(null), 2500)
+  }, [closed, saveSession, symbol, timeframe, meta, candles, cursor, ambiguity, costs])
   const floating = current ? floatingPnl(open, current.c) : 0
 
   return (
@@ -390,10 +429,33 @@ export default function Backtesting() {
 
                 <CostBreakdown summary={costs_} />
 
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+                  <button className="btn-primary" onClick={persist} disabled={saveState === 'saving'}>
+                    {saveState === 'saving' ? 'Saving…' : 'Save session'}
+                  </button>
+                  <span style={{ fontSize: 11.5, color: saveState === 'error' ? 'var(--red)' : 'var(--text-3)' }}>
+                    {saveState === 'saved' && 'Saved — compare it against your live trades below.'}
+                    {saveState === 'error' && 'Could not save. Has supabase/phase8.sql been run?'}
+                    {!saveState && 'Candles are never stored — only the trades you took.'}
+                  </span>
+                </div>
+
                 {ambiguity.count > 0 && <AmbiguityNote report={ambiguity} />}
               </>
             )}
           </Panel>
+
+          {sessionsReady && comparing && (
+            <Panel title="Backtest vs Live" delay={0.1} style={{ marginTop: 14 }}
+              right={<span style={{ fontSize: 10.5, color: 'var(--text-3)' }}>are you trading what you tested?</span>}>
+              <Comparison
+                session={comparing}
+                liveTrades={trades}
+                sessions={sessions}
+                onPick={setCompareId}
+              />
+            </Panel>
+          )}
         </>
       )}
     </>
