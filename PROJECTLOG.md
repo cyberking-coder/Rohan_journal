@@ -53,6 +53,32 @@ These block or shape later phases. None block Phases 0–4.
 
 ## Entries
 
+### 2026-08-13 — Fix: the MT5 upsert key was a partial index
+
+First real run of the bridge against a live FundingPips account failed on
+every trade write with `42P10: there is no unique or exclusion constraint
+matching the ON CONFLICT specification`.
+
+`mt5.sql` created `trades_user_external_uniq` with `where external_id is not
+null`. Postgres cannot infer a *partial* index for `ON CONFLICT`, so the
+upsert had no key to conflict on. This is the identical mistake found in
+`phase6.sql` during the calendar work — same reasoning, same failure, and it
+had been sitting in `mt5.sql` since well before this project started. It only
+surfaced now because nobody had actually run the bridge.
+
+The WHERE clause bought nothing: Postgres treats NULLs as distinct, so
+manually-entered trades (which have no `external_id`) coexist happily under a
+plain unique index.
+
+Verified against PostgreSQL 16, including the upgrade path — an install
+carrying the old partial index is fixed by re-running `mt5.sql` — and the
+transition the bridge depends on: an open position upserted, then closed,
+lands on one row rather than two.
+
+**Action required:** re-run `supabase/mt5.sql`.
+
+---
+
 ### 2026-08-13 — Investor-login sync: open positions and account balance
 
 Closes the last non-vendor gap in phase 5. Prompted by the observation that an
