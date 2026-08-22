@@ -21,7 +21,7 @@ than the PRD asks · **missing** = nothing in the repo.
 | §82 | Security / RLS | every `supabase/*.sql`, `docs/SECURITY.md` |
 | §92 | Economic calendar | `phase6.sql`, `calendar_bridge/` |
 | §93 | AI analytics | `phase7.sql`, `supabase/functions/generate-report/` |
-| §106 | Security test suite | `supabase/security_test.sql` (54 checks) |
+| §106 | Security test suite | `supabase/security_test.sql` (61 checks) |
 
 ## Gaps, in the order they are worth building
 
@@ -35,8 +35,9 @@ than the PRD asks · **missing** = nothing in the repo.
    `src/lib/sessionConfig.js`.* Presets (classic, four-way, ICT kill zones)
    plus a full editor, in two modes: partitions that tile the day, and
    overlapping named windows.
-4. **§53 Execution model** — spread, commission, slippage and swap in the
-   backtester. Without it, backtest results are optimistic by construction.
+4. **§53 Execution model** — *now built, see `src/lib/execution.js`.* Spread,
+   commission, slippage and swap, with a breakdown showing where the money
+   went and a flag when costs turn a winner into a loser.
 5. **§67 Backtest-vs-live comparison** — the payoff for 4.
 6. **§55–59 ICT/SMC engines** — FVG, liquidity, HTF/LTF alignment detection.
 7. **§34–40 Market-data architecture** — 1-minute canonical bars, Parquet, R2,

@@ -10,6 +10,8 @@ import {
   positionPnl, replay, toTradeRows, validateOrder,
 } from '../lib/backtest'
 import { TF_ORDER, useCandleSets, useCandles } from '../lib/useCandles'
+import { CostBreakdown, CostControls } from '../components/CostPanel'
+import { COST_PRESETS, DEFAULT_PRESET, costSummary } from '../lib/execution'
 
 // How many candles are visible at once. Enough context to read structure
 // without shrinking bodies to a smear.
@@ -49,6 +51,10 @@ export default function Backtesting() {
   // what the P&L came to — is derived from this plus the candles, so rewinding
   // and changing timeframe both reproduce the session exactly.
   const [actions, setActions] = useState([])
+  // Costs default to a real preset rather than to zero. Zero is the one value
+  // guaranteed to be wrong, and a backtest that silently assumes it is not a
+  // pessimistic estimate of a strategy — it is a different strategy.
+  const [costs, setCosts] = useState(() => ({ ...COST_PRESETS[DEFAULT_PRESET], preset: DEFAULT_PRESET }))
 
   const fileRef = useRef(null)
 
@@ -64,9 +70,11 @@ export default function Backtesting() {
   // and it's what makes scrubbing and timeframe changes exact rather than
   // approximate.
   const { open, closed } = useMemo(
-    () => replay(candles, actions, cursor),
-    [candles, actions, cursor],
+    () => replay(candles, actions, cursor, costs),
+    [candles, actions, cursor, costs],
   )
+
+  const costs_ = useMemo(() => costSummary(closedWithCosts(closed)), [closed])
 
   // ── Advancing ────────────────────────────────────────────────────────────
   // Just moves the cursor; the fills follow from `replay` above.
@@ -322,7 +330,12 @@ export default function Backtesting() {
           </Panel>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginBottom: 14 }}>
-            <Panel title="New Order" delay={0.04}>
+            <Panel title="Execution Costs" delay={0.035} style={{ marginBottom: 14 }}
+            right={<span style={{ fontSize: 10.5, color: 'var(--text-3)' }}>applied to every fill</span>}>
+            <CostControls costs={costs} onChange={setCosts} />
+          </Panel>
+
+          <Panel title="New Order" delay={0.04}>
               <Ticket price={current?.c} onPlace={place} symbol={symbol} onSymbol={setSymbol} />
             </Panel>
 
@@ -374,6 +387,8 @@ export default function Backtesting() {
                   <Stat label="Max DD" money={stats.maxDrawdown} colored />
                   <Stat label="Expectancy" money={stats.expectancy} colored />
                 </div>
+
+                <CostBreakdown summary={costs_} />
 
                 {ambiguity.count > 0 && <AmbiguityNote report={ambiguity} />}
               </>
@@ -642,4 +657,11 @@ function How({ title, body }) {
 const ghost = {
   padding: '8px 12px', borderRadius: 10, fontSize: 12.5,
   border: '1px solid var(--stroke)', color: 'var(--text-2)',
+}
+
+// The engine attaches a cost breakdown to each closed trade; the summary panel
+// wants just those. Trades closed before costs were configured have none, and
+// are skipped rather than counted as free.
+function closedWithCosts(closed) {
+  return (closed || []).map((t) => t.costs).filter(Boolean)
 }

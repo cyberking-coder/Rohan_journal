@@ -14,6 +14,7 @@
 // anyone who does want to wire a live API.
 
 import { contractSizeFor, computePnl } from './instruments.js'
+import { costedResult } from './execution.js'
 
 // ---------------------------------------------------------------------------
 // Candles
@@ -305,13 +306,29 @@ export function openPosition({ symbol, side, lots, entry, stopLoss, takeProfit, 
   }
 }
 
-export function closePosition(position, { price, at, reason }) {
+/**
+ * Closes a position, charging execution costs if any were configured.
+ *
+ * `pnl` stays the field the rest of the app reads, and it is now the NET
+ * figure. That is deliberate: every downstream consumer — the equity curve,
+ * the stats block, the results panel — should be looking at what the trade
+ * would actually have made. The gross is kept alongside it so the difference
+ * can be shown rather than merely suffered.
+ */
+export function closePosition(position, { price, at, reason }, costs = null) {
+  if (!costs) {
+    return { ...position, exit: price, closedAt: at, reason, pnl: positionPnl(position, price) }
+  }
+
+  const c = costedResult(position, price, costs, { reason, closedAt: at })
   return {
     ...position,
     exit: price,
     closedAt: at,
     reason,
-    pnl: positionPnl(position, price),
+    pnl: c.net,
+    gross: c.gross,
+    costs: c,
   }
 }
 
@@ -322,7 +339,7 @@ export function closePosition(position, { price, at, reason }) {
  * the replay can be stepped backwards by replaying from the start, which is
  * only sound if each step is a pure function of the one before it.
  */
-export function step(open, candle) {
+export function step(open, candle, costs = null) {
   const stillOpen = []
   const closed = []
 
@@ -336,7 +353,7 @@ export function step(open, candle) {
     }
     const exit = resolveExit(position, candle)
     if (exit) {
-      closed.push({ ...closePosition(position, { price: exit.price, at: exit.at, reason: exit.reason }), ambiguous: exit.ambiguous, gapped: exit.gapped })
+      closed.push({ ...closePosition(position, { price: exit.price, at: exit.at, reason: exit.reason }, costs), ambiguous: exit.ambiguous, gapped: exit.gapped })
     } else {
       stillOpen.push(position)
     }
@@ -417,7 +434,7 @@ export function ambiguityReport(closed) {
  * actions — a stop hit during the bar happened before the trader could act at
  * its close.
  */
-export function replay(candles, actions = [], uptoIndex = candles.length - 1) {
+export function replay(candles, actions = [], uptoIndex = candles.length - 1, costs = null) {
   let open = []
   const closed = []
   const upto = Math.min(uptoIndex, candles.length - 1)
@@ -426,7 +443,7 @@ export function replay(candles, actions = [], uptoIndex = candles.length - 1) {
     const bar = candles[i]
 
     if (i > 0) {
-      const result = step(open, bar)
+      const result = step(open, bar, costs)
       open = result.open
       closed.push(...result.closed)
     }
@@ -445,7 +462,7 @@ export function replay(candles, actions = [], uptoIndex = candles.length - 1) {
         if (target) {
           open = open.filter((p) => p.id !== action.id)
           closed.push({
-            ...closePosition(target, { price: bar.c, at: bar.t, reason: 'manual' }),
+            ...closePosition(target, { price: bar.c, at: bar.t, reason: 'manual' }, costs),
             ambiguous: false, gapped: false,
           })
         }
