@@ -22,14 +22,16 @@ except ImportError:
     print("Note: the MetaTrader5 package is Windows-only.")
     sys.exit(1)
 
-from supabase import create_client
 from dotenv import load_dotenv
 
 load_dotenv()
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
-JOURNAL_USER_ID = os.environ.get("JOURNAL_USER_ID")
+from journal_auth import connect  # noqa: E402  (after load_dotenv, which it reads)
+
+# Set once the journal connection is made — either from the signed-in user or,
+# for a single-user service-key setup, from JOURNAL_USER_ID.
+JOURNAL_USER_ID = None
+
 POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "60"))
 LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "30"))
 
@@ -84,18 +86,6 @@ def resolve_strategy(magic, comment):
             return strat
     # 3) fall back to the raw comment, else Unassigned
     return comment or "Unassigned"
-
-
-def require_config():
-    missing = [k for k, v in {
-        "SUPABASE_URL": SUPABASE_URL,
-        "SUPABASE_SERVICE_KEY": SUPABASE_SERVICE_KEY,
-        "JOURNAL_USER_ID": JOURNAL_USER_ID,
-    }.items() if not v]
-    if missing:
-        print("Missing required env vars: " + ", ".join(missing))
-        print("Copy .env.example to .env and fill it in.")
-        sys.exit(1)
 
 
 def init_mt5():
@@ -458,8 +448,8 @@ def main():
     parser.add_argument("--once", action="store_true", help="sync a single time and exit")
     args = parser.parse_args()
 
-    require_config()
-    sb = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    global JOURNAL_USER_ID
+    sb, JOURNAL_USER_ID = connect()
     init_mt5()
     account_id = ensure_broker_account(sb)
 

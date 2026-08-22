@@ -7,7 +7,11 @@ no data vendor, no quota.
 
     python export_candles.py --symbol XAUUSD --timeframe H1 --days 365
     python export_candles.py --list gold          # what's this broker calling it?
-    python export_candles.py --symbol EURUSD --timeframe M5 --from 2026-01-01 --to 2026-06-30
+
+Or push straight into the journal, so the Backtesting page needs no file at
+all and can switch timeframes on the fly:
+
+    python export_candles.py --symbol XAUUSD --timeframes M5,M15,H1,H4 --days 365 --upload
 
 Runs on the same Windows machine as the terminal, and works with the read-only
 investor login — price history is market data, not account data.
@@ -44,6 +48,14 @@ except ImportError:
 MT5_LOGIN = os.environ.get("MT5_LOGIN")
 MT5_PASSWORD = os.environ.get("MT5_PASSWORD")
 MT5_SERVER = os.environ.get("MT5_SERVER")
+
+# Rows per request. Large enough to be quick, small enough that one failure
+# doesn't lose much and the progress line actually moves.
+UPLOAD_CHUNK = 2000
+
+# Above this, a single symbol/timeframe is enough data to be slow to query and
+# to eat a free-tier database. Worth a word before it's written, not after.
+BIG_UPLOAD = 200_000
 
 
 def timeframes():
@@ -134,6 +146,39 @@ def write_csv(path, rates, offset_seconds):
                 int(r["tick_volume"]) if "tick_volume" in r.dtype.names else 0,
             ))
     return len(rates)
+
+
+def to_rows(user_id, symbol, timeframe, rates, offset_seconds):
+    """Bars in the shape the `candles` table takes, with times in real UTC."""
+    rows = []
+    for r in rates:
+        stamp = datetime.fromtimestamp(int(r["time"]) - offset_seconds, tz=timezone.utc)
+        rows.append({
+            "user_id": user_id,
+            "symbol": symbol,
+            "timeframe": timeframe.upper(),
+            "t": stamp.isoformat(),
+            "o": float(r["open"]), "h": float(r["high"]),
+            "l": float(r["low"]), "c": float(r["close"]),
+            "v": int(r["tick_volume"]) if "tick_volume" in r.dtype.names else 0,
+        })
+    return rows
+
+
+def upload(sb, rows):
+    """Upsert bars in chunks, keyed on (user, symbol, timeframe, time).
+
+    Re-uploading an overlapping range updates those bars rather than
+    duplicating them, so "fetch the last 30 days" is safe to run on a schedule.
+    """
+    written = 0
+    for i in range(0, len(rows), UPLOAD_CHUNK):
+        chunk = rows[i:i + UPLOAD_CHUNK]
+        sb.table("candles").upsert(chunk, on_conflict="user_id,symbol,timeframe,t").execute()
+        written += len(chunk)
+        print(f"    {written}/{len(rows)}", end="\r", flush=True)
+    print(" " * 30, end="\r")
+    return written
 
 
 def init():

@@ -15,7 +15,7 @@ was applied, just run it again.
 | 7 | `phase5.sql` | `broker_accounts` table and the foreign key from `trades`. | Optional; the app falls back to source-derived accounts. |
 | 8 | `phase6.sql` | `economic_events` — the shared economic calendar, read-only from the browser. | Optional; the Market page says so if it's absent. |
 | 9 | `phase7.sql` | `ai_reports` — the AI report archive and its weekly quota bucket. | Optional; the AI Report page says so if it's absent. |
-| 10 | `phase8.sql` | `backtest_sessions` — saved candle-replay sessions. Candles themselves are never stored. | Optional; replay works without saving. |
+| 10 | `phase8.sql` | `backtest_sessions` and the per-user `candles` table the Backtesting page replays from. | Optional; replay also works from a file. **Re-run it** if you applied it before the candles table existed. |
 
 `enable-auth.sql` and `migrate-numeric.sql` are one-off fixes from earlier in
 the project's life. Only run them if the file's own comments describe a problem

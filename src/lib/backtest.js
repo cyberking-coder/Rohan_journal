@@ -391,3 +391,88 @@ export function ambiguityReport(closed) {
     }, 0),
   }
 }
+
+// ---------------------------------------------------------------------------
+// Deterministic replay
+// ---------------------------------------------------------------------------
+
+/**
+ * Rebuilds the whole simulation from the user's actions and the candles.
+ *
+ * `actions` is the record of what the trader *did* — placed this order at this
+ * moment, closed that one by hand at that moment — timestamped absolutely.
+ * Everything else (which stops were hit, what the P&L came to) is derived.
+ *
+ * Two things need this rather than incremental state:
+ *
+ *   • Scrubbing. Rewinding and replaying has to reproduce exactly what
+ *     happened, including trades the user closed manually. Rebuilding from
+ *     fills alone silently drops those — the position simply vanishes.
+ *   • Changing timeframe. Actions carry real timestamps, so they land on
+ *     whichever bar of the new series contains them, and the same session
+ *     continues at finer or coarser resolution.
+ *
+ * Each action is applied at the *close* of the bar containing it, matching how
+ * orders are placed live, and fills for a bar are resolved before that bar's
+ * actions — a stop hit during the bar happened before the trader could act at
+ * its close.
+ */
+export function replay(candles, actions = [], uptoIndex = candles.length - 1) {
+  let open = []
+  const closed = []
+  const upto = Math.min(uptoIndex, candles.length - 1)
+
+  for (let i = 0; i <= upto; i++) {
+    const bar = candles[i]
+
+    if (i > 0) {
+      const result = step(open, bar)
+      open = result.open
+      closed.push(...result.closed)
+    }
+
+    // Actions belonging to this bar: after the previous bar's close, up to and
+    // including this one. On a coarser timeframe several actions can land in
+    // the same bar, which is correct — that's what the coarser view means.
+    const from = i > 0 ? candles[i - 1].t : -Infinity
+    for (const action of actions) {
+      if (!(action.at > from && action.at <= bar.t)) continue
+
+      if (action.type === 'open') {
+        open = [...open, openPosition({ ...action.order, at: bar.t, entry: action.order.entry ?? bar.c })]
+      } else if (action.type === 'close') {
+        const target = open.find((p) => p.id === action.id)
+        if (target) {
+          open = open.filter((p) => p.id !== action.id)
+          closed.push({
+            ...closePosition(target, { price: bar.c, at: bar.t, reason: 'manual' }),
+            ambiguous: false, gapped: false,
+          })
+        }
+      }
+    }
+  }
+
+  return { open, closed }
+}
+
+/**
+ * The bar containing `ms`, or the last one before it.
+ *
+ * Used to keep your place when the timeframe changes: the same moment maps to
+ * a different index in a different series, and jumping to the same *index*
+ * would silently move you months.
+ */
+export function indexAtOrBefore(candles, ms) {
+  if (!candles.length) return -1
+  let lo = 0
+  let hi = candles.length - 1
+  if (ms < candles[0].t) return 0
+  if (ms >= candles[hi].t) return hi
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2)
+    if (candles[mid].t <= ms) lo = mid
+    else hi = mid - 1
+  }
+  return lo
+}

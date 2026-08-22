@@ -32,20 +32,51 @@ same row the open one created and flips it from open to closed.
 > curve, account balances — is computed from closed trades only. Floating P&L
 > is shown separately, never mixed in.
 
+## How the bridge signs in
+
+Set `SUPABASE_ANON_KEY`, `JOURNAL_EMAIL` and `JOURNAL_PASSWORD` in `.env`. The
+bridge logs into your journal account and Supabase's row-level security then
+confines it to your own rows — the same protection the web app relies on. Your
+user id comes from the login, so there's nothing to copy by hand.
+
+The older `SUPABASE_SERVICE_KEY` + `JOURNAL_USER_ID` path still works for a
+single-user setup, and the bridge warns when it's used. **Never hand a service
+key to another person running this**: it bypasses row-level security, so its
+holder can read and modify every user's trades, not just their own.
+
 ## Exporting candles for the Backtesting page
 
 The same terminal connection can pull price history, so the replay runs on your
-broker's real prices with no data vendor and no quota:
+broker's real prices with no data vendor and no quota.
+
+**Straight into the journal** (recommended) — no file, and the Backtesting page
+can then switch timeframe mid-replay:
+
+```bat
+python export_candles.py --symbol XAUUSD --timeframes M5,M15,H1,H4 --days 365 --upload
+```
+
+Run `supabase/phase8.sql` first (re-run it if you applied an earlier version —
+it's idempotent and now adds the `candles` table). Re-running the export for an
+overlapping range updates those bars rather than duplicating them, so it's safe
+on a schedule.
+
+**Or to a file**, if you'd rather not store anything:
 
 ```bat
 python export_candles.py --symbol XAUUSD --timeframe H1 --days 365
-python export_candles.py --symbol EURUSD --timeframe M5 --from 2026-01-01 --to 2026-06-30
 python export_candles.py --list gold        # what does this broker call it?
 ```
 
-It writes `XAUUSD_H1.csv` next to the script. Load that on the **Backtesting**
-page (Choose a file) — no conversion needed, the columns are already what the
-app reads.
+That writes `XAUUSD_H1.csv`; load it with **Choose a file** on the Backtesting
+page. One timeframe per file — several at once needs `--upload`.
+
+### How much to upload
+
+A year of H1 is about 6,000 bars per symbol and costs nothing. A year of M1 is
+about 375,000, which is slow to query and will eat a free-tier database; the
+uploader says so before writing that much. M5 and up is the comfortable range
+for anything you'd actually sit and replay.
 
 **On timezones.** MT5 stamps every bar in *server* time, and most brokers run
 theirs on UTC+2/+3. The exporter measures the offset from a live tick and

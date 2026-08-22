@@ -78,3 +78,76 @@ create policy "backtest sessions - update own" on public.backtest_sessions
 
 create policy "backtest sessions - delete own" on public.backtest_sessions
   for delete using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
+-- Candle storage (added after the first phase 8 release)
+-- ---------------------------------------------------------------------------
+-- Re-run this file to add it; the whole script is idempotent.
+--
+-- ── Reversing an earlier decision, deliberately ────────────────────────────
+-- The header above says candles are not stored, and gives two reasons: bulk
+-- data is slow through Postgres, and market-data licences forbid
+-- redistribution. The second reason doesn't apply to what this table does.
+--
+-- Redistribution means serving one party's price data to *other people*. These
+-- rows are per-user and RLS-scoped: your own broker's candles, readable only
+-- by you, pulled by a bridge running on your own machine. That is the same
+-- relationship you already have with your trade history. Nobody else can read
+-- them, so nothing is being redistributed.
+--
+-- The first reason still stands and shapes the design: this is for the
+-- timeframes a human actually replays. A year of H1 is ~6,000 rows per symbol
+-- and is nothing; a year of M1 is ~375,000 and will be slow and large. The
+-- uploader warns before writing anything on that scale.
+
+create table if not exists public.candles (
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  symbol     text not null,
+  -- 'M1' | 'M5' | 'M15' | 'M30' | 'H1' | 'H4' | 'D1' | 'W1'
+  timeframe  text not null,
+  -- Bar open time, always UTC. The bridge converts from the broker's server
+  -- clock before writing — see mt5_bridge/export_candles.py.
+  t          timestamptz not null,
+
+  o          numeric(18,8) not null,
+  h          numeric(18,8) not null,
+  l          numeric(18,8) not null,
+  c          numeric(18,8) not null,
+  v          bigint not null default 0,
+
+  -- No surrogate id: the bar's identity IS (user, symbol, timeframe, time).
+  -- A serial key would allow the same bar twice, which is precisely what an
+  -- overlapping re-upload would then produce.
+  primary key (user_id, symbol, timeframe, t)
+);
+
+comment on table public.candles is
+  'Per-user OHLC history, uploaded from the user''s own MT5 terminal. Bar times are UTC.';
+
+-- The replay's only query shape: one symbol and timeframe, ordered by time,
+-- usually windowed to a date range.
+create index if not exists candles_lookup_idx
+  on public.candles (user_id, symbol, timeframe, t);
+
+-- Powers the "what do I have?" picker without scanning the bars themselves.
+create index if not exists candles_sets_idx
+  on public.candles (user_id, symbol, timeframe);
+
+alter table public.candles enable row level security;
+
+drop policy if exists "candles - read own" on public.candles;
+drop policy if exists "candles - insert own" on public.candles;
+drop policy if exists "candles - update own" on public.candles;
+drop policy if exists "candles - delete own" on public.candles;
+
+create policy "candles - read own" on public.candles
+  for select using (auth.uid() = user_id);
+
+create policy "candles - insert own" on public.candles
+  for insert with check (auth.uid() = user_id);
+
+create policy "candles - update own" on public.candles
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "candles - delete own" on public.candles
+  for delete using (auth.uid() = user_id);

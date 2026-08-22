@@ -53,6 +53,62 @@ These block or shape later phases. None block Phases 0–4.
 
 ## Entries
 
+### 2026-08-13 — Per-user auth, and a backtester that needs no file
+
+Two changes that turned out to belong together: the bridge had to authenticate
+as the user before it could sensibly write candles on their behalf.
+
+**Per-user auth (`mt5_bridge/journal_auth.py`)**
+The bridge connected with the SERVICE key, which bypasses row-level security.
+Fine when one person owns the database; unacceptable the moment a second
+person runs it, because that key can read and modify *every* user's trades.
+It now signs in with the journal email and password using the public anon key,
+so RLS confines it to that user's own rows — the same protection the web app
+relies on. The user id comes from the login rather than being copied by hand.
+The service-key path still works for a single-user setup and warns loudly.
+
+**Candles in the journal**
+`supabase/phase8.sql` now has a `candles` table, and `export_candles.py
+--timeframes M5,M15,H1,H4 --upload` pushes several sets in one run. The
+Backtesting page reads them directly: pick a symbol, pick a timeframe, replay.
+No file at all.
+
+This reverses the "candles are not stored" decision in that file's own header,
+and the header now says why. One of its two reasons doesn't survive contact
+with what this actually does: redistribution means serving price data to *other
+people*, and these rows are per-user and RLS-scoped — your broker's candles,
+readable only by you. The other reason (bulk data is slow) still stands and
+shapes the design, so the uploader warns before writing M1-scale history.
+
+**Switching timeframe keeps your place in TIME**
+The same instant is a different index in a different series, so jumping by
+index would silently move you weeks. Orders carry absolute timestamps, the
+cursor maps through `indexAtOrBefore`, and the session continues at the new
+resolution — where a finer timeframe genuinely resolves fills the coarser one
+could only guess at.
+
+**A bug this exposed and fixed**
+Replay state is now derived from the *actions* the trader took plus the
+candles, rather than accumulated incrementally. That fixed a live bug:
+scrubbing rebuilt state from fills alone, so any trade the user had closed by
+hand simply vanished on rewind.
+
+**And one I introduced, found by measuring**
+Switching to a symbol with fewer bars left the cursor past the end — 509 of
+200 — because the reset effect early-returned once it had seen the series key,
+and the key changes a render *before* the shorter candle array arrives. The
+cursor is now clamped on every length change.
+
+**Verified**
+- 493 JS assertions, 62 Python ones, clean build.
+- `phase8.sql` run three times against PostgreSQL 16; re-uploading a bar
+  updates it in place rather than duplicating.
+- Browser: manual close survives a scrub; H1 → M15 holds the same moment
+  (Jun 6 07:00) while the cursor moves 128/400 → 509/1600 with the position
+  intact; a symbol switch clamps and clears correctly.
+
+---
+
 ### 2026-08-13 — MT5 candle exporter
 
 Answers "where do I get real candles" with: the terminal you already have
