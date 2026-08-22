@@ -53,6 +53,40 @@ These block or shape later phases. None block Phases 0–4.
 
 ## Entries
 
+### 2026-08-13 — MT5 candle exporter
+
+Answers "where do I get real candles" with: the terminal you already have
+connected. `mt5_bridge/export_candles.py` pulls OHLC history via
+`copy_rates_range` and writes a CSV the Backtesting page reads directly — your
+broker's own prices, no vendor, no quota, and it works under the read-only
+investor login since price history is market data rather than account data.
+
+**The trap it exists to handle**
+MT5 stamps every bar in *server* time, and most brokers run theirs on UTC+2/+3.
+Treating those numbers as UTC shifts the whole file by a couple of hours. A
+replay looks identical either way — same shape, same fills — which is precisely
+why it matters: the error never announces itself, but the candles end up hours
+away from your own trade times and from the journal's session analysis.
+
+The offset is measured from a live tick and removed. When the market is closed
+the last tick is stale and the difference is the tick's age rather than a
+timezone, so it **refuses to guess** and says so, rather than shifting an entire
+history file by a wrong amount. `--server-offset` is there for that case.
+
+Also handles prop-firm symbol suffixes (`XAUUSD.s`, `GBPJPY-ECN`) — an
+exact-match lookup would fail on exactly the accounts most likely to use this.
+
+**Verified**
+- 30 assertions in `mt5_bridge/test_export.py` against a stubbed terminal,
+  weighted toward the offset logic and the weekend-refusal case.
+- Round trip: 300 synthetic bars on a UTC+3 server exported, then parsed by the
+  app's own `parseCandles` — 300 in, 300 out, no skips, H1 detected, and the
+  midnight-server bar correctly landing at 00:00 UTC.
+- Loaded in the browser on the Backtesting page: 120/300 window, H1, no
+  warnings.
+
+---
+
 ### 2026-08-13 — Fix: the MT5 upsert key was a partial index
 
 First real run of the bridge against a live FundingPips account failed on
