@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node test/analytics.test.mjs && node test/tools.test.mjs && node test/journal.test.mjs && node test/prefs.test.mjs && node test/accounts.test.mjs && node test/calendar.test.mjs && node test/aireport.test.mjs && node test/breakdowns.test.mjs && node test/backtest.test.mjs && node test/sharing.test.mjs",
+    "test": "node test/analytics.test.mjs && node test/tools.test.mjs && node test/journal.test.mjs && node test/prefs.test.mjs && node test/accounts.test.mjs && node test/calendar.test.mjs && node test/aireport.test.mjs && node test/breakdowns.test.mjs && node test/backtest.test.mjs && node test/sharing.test.mjs && node test/funded.test.mjs",
     "start": "serve -s dist -l tcp://0.0.0.0:${PORT:-3000}"
   },
   "dependencies": {

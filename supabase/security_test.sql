@@ -96,6 +96,14 @@ insert into public.candles (user_id, symbol, timeframe, t, o, h, l, c) values
 insert into public.economic_events (event_at, currency, title) values
   (now(), 'USD', 'CPI YoY');
 
+-- A prop challenge each. The rules are not secret in the way a password is,
+-- but they say which firm a trader is with, at what size, and how close to
+-- failing — which is exactly the kind of thing a rival account holder should
+-- not be able to enumerate.
+insert into public.funded_accounts (user_id, label, firm, starting_balance, profit_target) values
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'A challenge', 'FundingPips', 100000, 8000),
+  ('bbbbbbbb-0000-0000-0000-000000000002', 'B challenge', 'FTMO', 50000, 4000);
+
 -- Two share links owned by A: one live, one revoked. Plus an expired one.
 insert into public.shared_dashboards (owner_user_id, code, label, sections, expires_at, revoked) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 'VIEW-LIVE', 'A live share',
@@ -308,6 +316,43 @@ select record('B: sees only own trades', count(*) = 1, 'saw ' || count(*)) from 
 select record('B: cannot see A''s share links', count(*) = 0, 'saw ' || count(*))
   from public.shared_dashboards;
 
+select record('B: sees only own funded account', count(*) = 1, 'saw ' || count(*))
+  from public.funded_accounts;
+
+-- Writing another user's challenge would let an attacker move somebody's
+-- profit target or loss limit, which is a quiet way to make their dashboard
+-- lie to them about whether they still have an account.
+do $$
+declare n int;
+begin
+  update public.funded_accounts set profit_target = 1
+    where user_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  perform record('B: cannot edit A''s funded rules', n = 0, n || ' row(s) updated');
+exception when others then
+  perform record('B: cannot edit A''s funded rules', true, 'refused: ' || SQLERRM);
+end $$;
+
+do $$
+declare n int;
+begin
+  delete from public.funded_accounts where user_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  perform record('B: cannot delete A''s funded rules', n = 0, n || ' row(s) deleted');
+exception when others then
+  perform record('B: cannot delete A''s funded rules', true, 'refused: ' || SQLERRM);
+end $$;
+
+-- Inserting a row under someone else's id is the other half of the same hole.
+do $$
+begin
+  insert into public.funded_accounts (user_id, label)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', 'planted');
+  perform record('B: cannot plant a funded account on A', false, 'insert succeeded');
+exception when others then
+  perform record('B: cannot plant a funded account on A', true, 'refused');
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- Act as an anonymous visitor — nothing should be readable.
 -- ---------------------------------------------------------------------------
@@ -323,6 +368,8 @@ select record('anon: no screenshots', count(*) = 0, 'saw ' || count(*))
   from storage.objects where bucket_id = 'screenshots';
 select record('anon: cannot list share links', count(*) = 0, 'saw ' || count(*))
   from public.shared_dashboards;
+select record('anon: no funded accounts', count(*) = 0, 'saw ' || count(*))
+  from public.funded_accounts;
 
 -- ── The share function, called anonymously ────────────────────────────────
 -- This is the one path by which a stranger reads someone else's data, so it

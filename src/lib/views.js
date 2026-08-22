@@ -50,6 +50,13 @@ export const VIEWS = [
     description: 'AI-written performance reviews of your trading.',
   },
   {
+    key: 'funded',
+    label: 'Funded',
+    icon: '◆',
+    ready: true,
+    description: 'Prop-firm challenge rules, drawdown limits and pass/fail.',
+  },
+  {
     key: 'backtesting',
     label: 'Backtesting',
     icon: '⧗',
