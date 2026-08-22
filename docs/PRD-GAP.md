@@ -52,8 +52,12 @@ than the PRD asks · **missing** = nothing in the repo.
 8. **§83 privacy (export + delete)** — *now built, see `src/lib/privacy.js`.*
    Full export, plus scoped deletions for trades, journal, backtests and the
    whole account.
-9. **§71 Worker/queue system**, **§84 billing**, **§86 admin** — needed before
-   selling, not needed to use the app.
+9. **§84 billing** — *entitlements built, see `src/lib/plans.js`.* Tiers,
+   limits, upgrade prompts and downgrade impact. Payment collection is NOT
+   wired: that needs a Stripe account and a legal entity, and should be a
+   deliberate step rather than a side effect.
+10. **§71 Worker/queue system**, **§86 admin** — needed before selling, not
+    needed to use the app.
 9. **cTrader** — not started.
 
 ## Three decisions the PRD forces, which are yours and not mine

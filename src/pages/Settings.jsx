@@ -14,6 +14,11 @@ import {
 import { fmtPct } from '../lib/stats'
 import SessionEditor from '../components/SessionEditor'
 import PrivacyPanel from '../components/PrivacyPanel'
+import { useShares } from '../lib/useShares'
+import { useFundedAccounts } from '../lib/useFundedAccounts'
+import { useBacktestSessions } from '../lib/useBacktestSessions'
+import { DEFAULT_PLAN, usageFrom } from '../lib/plans'
+import PlanTable from '../components/PlanTable'
 
 const TABS = [
   { key: 'profile', label: 'Profile' },
@@ -51,7 +56,7 @@ export default function Settings({ trades = [], onClearAll, brokerAccounts }) {
         {active === 'accounts' && <AccountsTab trades={trades} brokerAccounts={brokerAccounts} />}
         {active === 'sharing' && <SharingTab brokerAccounts={brokerAccounts} />}
         {active === 'preferences' && <PreferencesTab trades={trades} onClearAll={onClearAll} />}
-        {active === 'billing' && <BillingTab />}
+        {active === 'billing' && <BillingTab trades={trades} brokerAccounts={brokerAccounts} />}
         {active === 'security' && <SecurityTab />}
       </motion.div>
     </>
@@ -315,17 +320,26 @@ function PreferencesTab({ trades, onClearAll }) {
 
 /* ── Billing tab ────────────────────────────────────────────────────────── */
 
-function BillingTab() {
+function BillingTab({ trades = [], brokerAccounts = [] }) {
+  const { user } = useAuth()
+  const { sessions } = useBacktestSessions(user?.id)
+  const { accounts: funded } = useFundedAccounts(user?.id)
+  const { shares } = useShares(user?.id)
+
+  // Counted from what actually exists rather than from a stored counter. A
+  // usage number that drifts from reality is how people get billed for things
+  // they do not have.
+  const usage = usageFrom({
+    brokerAccounts: brokerAccounts.accounts || brokerAccounts || [],
+    backtestSessions: sessions,
+    funded,
+    shares,
+    reportsThisWeek: 0,
+  })
+
   return (
-    <Section title="Billing">
-      <Empty>
-        This app has no paid tiers and takes no payment. The spec’s Free / Pro / Elite plans
-        need a Stripe account and a business behind them — that is phase 11, and only if you
-        decide this should become a multi-tenant product rather than your own journal.
-      </Empty>
-      <Note>
-        Nothing here is charged, metered or limited. Every feature that exists is available.
-      </Note>
+    <Section title="Plans">
+      <PlanTable current={DEFAULT_PLAN} usage={usage} />
     </Section>
   )
 }
