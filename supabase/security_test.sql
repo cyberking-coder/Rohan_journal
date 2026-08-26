@@ -37,6 +37,10 @@ create or replace function auth.role() returns text language sql stable as $$
 $$;
 
 grant usage on schema public, storage to authenticated;
+-- anon gets schema usage too, as it does on Supabase. Without this, the
+-- function-grant checks below would pass because the SCHEMA was denied, not
+-- the function — a test that passes for the wrong reason is worse than none.
+grant usage on schema public to anon;
 grant select, insert, update, delete on storage.objects to authenticated;
 grant select on storage.buckets to authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -102,6 +106,19 @@ insert into public.subscriptions (user_id, plan, status, stripe_customer_id, cur
 values ('aaaaaaaa-0000-0000-0000-000000000001', 'premium', 'active', 'cus_A',
         now() + interval '30 days');
 
+-- Give A a qualifying record: 25 closed trades across 12 days, all synced, so
+-- the leaderboard function can be exercised on real data rather than only on
+-- its empty case. Amounts are large and lopsided on purpose — if account size
+-- can leak, this is where it would show.
+insert into public.trades (user_id, symbol, side, pnl, fees, traded_at, closed_at, status, source)
+select 'aaaaaaaa-0000-0000-0000-000000000001', 'EURUSD', 'Long',
+       case when i % 5 < 3 then 4000 else -2000 end, 0,
+       now() - make_interval(days => i % 12),
+       now() - make_interval(days => i % 12),
+       'closed', 'mt5'
+from generate_series(1, 25) i;
+
+
 -- A prop challenge each. The rules are not secret in the way a password is,
 -- but they say which firm a trader is with, at what size, and how close to
 -- failing — which is exactly the kind of thing a rival account holder should
@@ -109,6 +126,21 @@ values ('aaaaaaaa-0000-0000-0000-000000000001', 'premium', 'active', 'cus_A',
 insert into public.funded_accounts (user_id, label, firm, starting_balance, profit_target) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 'A challenge', 'FundingPips', 100000, 8000),
   ('bbbbbbbb-0000-0000-0000-000000000002', 'B challenge', 'FTMO', 50000, 4000);
+
+-- ── Community seed ────────────────────────────────────────────────────────
+-- A opts into everything; B opts into nothing. B's absence is the default and
+-- is what most accounts look like.
+insert into public.community_profiles (user_id, handle, on_leaderboard, publishes)
+values ('aaaaaaaa-0000-0000-0000-000000000001', 'alpha', true, true);
+
+insert into public.shared_setups (user_id, title, thesis, tags, published, stat_trades)
+values
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'A published setup',
+   'A thesis long enough to satisfy the length constraint on this column.',
+   array['fvg'], true, 40),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'A DRAFT setup',
+   'An unpublished draft that must never be visible to anybody else at all.',
+   array['fvg'], false, 5);
 
 -- Two share links owned by A: one live, one revoked. Plus an expired one.
 insert into public.shared_dashboards (owner_user_id, code, label, sections, expires_at, revoked) values
@@ -136,6 +168,12 @@ values ('aaaaaaaa-0000-0000-0000-000000000001', 'XAUUSD', 'Long', -200, 0, now()
 update public.trades set tags = array['fvg','revenge-trade']
   where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' and symbol = 'XAUUSD';
 
+-- Every one of A's trades is synced. Done last, after all of them exist —
+-- placed earlier it missed the journalled trade seeded below it, and the
+-- badge check then failed for a reason that had nothing to do with the badge.
+update public.trades set source = 'mt5'
+  where user_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
 -- A screenshot belonging to each user, under their own folder.
 insert into storage.objects (bucket_id, name) values
   ('screenshots', 'aaaaaaaa-0000-0000-0000-000000000001/chart-a.png'),
@@ -151,7 +189,8 @@ select set_config('request.jwt.claim.role', 'authenticated', false);
 -- Each table: A must see exactly its own row, and none of B's.
 -- A owns two: the seeded one and the journalled XAUUSD trade the sharing
 -- checks need.
-select record('trades: sees own',        count(*) = 2, 'saw ' || count(*)) from public.trades;
+-- A owns 27: two from the original seed and 25 for the leaderboard.
+select record('trades: sees own',        count(*) = 27, 'saw ' || count(*)) from public.trades;
 select record('trades: not B''s',        count(*) = 0, 'saw ' || count(*)) from public.trades where user_id = 'bbbbbbbb-0000-0000-0000-000000000002';
 
 select record('broker_accounts: sees own', count(*) = 1, 'saw ' || count(*)) from public.broker_accounts;
@@ -330,6 +369,186 @@ select record('B: cannot see A''s share links', count(*) = 0, 'saw ' || count(*)
 select record('B: sees only own funded account', count(*) = 1, 'saw ' || count(*))
   from public.funded_accounts;
 
+-- ── Community ─────────────────────────────────────────────────────────────
+-- This is the one feature that shows users to each other, so the checks are
+-- about what leaks rather than only about what is blocked.
+
+-- Enumerating participants would expose everyone who opted in, plus the
+-- suspended flag. Other people's handles arrive through leaderboard(), which
+-- returns only what it means to.
+select record('B: cannot list community profiles', count(*) = 0, 'saw ' || count(*))
+  from public.community_profiles;
+
+-- Owner-only, exactly like every other table. Published setups reach people
+-- through browse_setups(), not through a policy here.
+select record('B: cannot read A''s setups directly', count(*) = 0, 'saw ' || count(*))
+  from public.shared_setups;
+
+-- Impersonation: the handle is an identity others see.
+do $$
+begin
+  insert into public.community_profiles (user_id, handle)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', 'imposter');
+  perform record('B: cannot create a profile as A', false, 'insert succeeded');
+exception when others then
+  perform record('B: cannot create a profile as A', true, 'refused');
+end $$;
+
+do $$
+begin
+  insert into public.community_profiles (user_id, handle) values
+    ('bbbbbbbb-0000-0000-0000-000000000002', 'ALPHA');
+  perform record('handles are unique case-insensitively', false, 'a near-duplicate handle was allowed');
+exception when unique_violation then
+  perform record('handles are unique case-insensitively', true, 'refused');
+when others then
+  perform record('handles are unique case-insensitively', true, 'refused: ' || SQLERRM);
+end $$;
+
+do $$
+declare n int;
+begin
+  update public.shared_setups set removed = false, title = 'hijacked';
+  get diagnostics n = row_count;
+  perform record('B: cannot edit A''s setups', n = 0, n || ' row(s) updated');
+exception when others then
+  perform record('B: cannot edit A''s setups', true, 'refused: ' || SQLERRM);
+end $$;
+
+-- browse_setups returns published work by design. What it must NOT return is
+-- a draft, or anything identifying beyond the chosen handle.
+select record('browse: shows a published setup',
+  jsonb_array_length(public.browse_setups()) = 1,
+  jsonb_array_length(public.browse_setups())::text || ' setup(s)');
+
+select record('browse: never shows a draft',
+  not exists (
+    select 1 from jsonb_array_elements(public.browse_setups()) e
+    where e->>'title' like '%DRAFT%'
+  ), 'an unpublished draft leaked');
+
+select record('browse: no user ids in the payload',
+  public.browse_setups()::text not like '%aaaaaaaa-0000%', 'an owner id leaked');
+
+select record('browse: shows the handle, not the account',
+  exists (
+    select 1 from jsonb_array_elements(public.browse_setups()) e
+    where e->>'author' = 'alpha'
+  ), 'the author handle is present');
+
+-- The rule that makes the whole feature safe to ship: no money, anywhere.
+select record('leaderboard: publishes no currency',
+  public.leaderboard()::text not similar to '%(pnl|balance|equity|total_net|gross_win)%',
+  'a money field leaked into the leaderboard');
+
+-- A now qualifies, so the function is exercised on real data.
+select record('leaderboard: lists a qualifying trader',
+  jsonb_array_length(public.leaderboard()->'entries') = 1,
+  jsonb_array_length(public.leaderboard()->'entries')::text || ' entries');
+
+select record('leaderboard: shows the handle, not the account',
+  public.leaderboard()->'entries'->0->>'handle' = 'alpha',
+  coalesce(public.leaderboard()->'entries'->0->>'handle', 'none'));
+
+-- The core promise. A's trades are 4,000 winners and 2,000 losers; if any raw
+-- amount reaches the payload, account size is inferable.
+select record('leaderboard: no raw amounts in the payload',
+  public.leaderboard()::text not like '%4000%'
+  and public.leaderboard()::text not like '%2000%',
+  'a raw trade amount leaked');
+
+-- The strongest available statement that this figure carries no account size:
+-- multiply every one of A's amounts by ten and the score must not move. An
+-- exact expected constant would be brittle and would prove less — this is the
+-- actual invariant the feature promises.
+do $$
+declare before numeric; after numeric;
+begin
+  before := (public.leaderboard()->'entries'->0->>'expectancy_r')::numeric;
+
+  reset role;
+  update public.trades set pnl = pnl * 10
+    where user_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+  set role authenticated;
+
+  after := (public.leaderboard()->'entries'->0->>'expectancy_r')::numeric;
+
+  reset role;
+  update public.trades set pnl = pnl / 10
+    where user_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+  set role authenticated;
+
+  perform record('leaderboard: the score is scale-free',
+    before is not null and before = after,
+    coalesce(before::text, 'null') || ' vs ' || coalesce(after::text, 'null'));
+end $$;
+
+-- Set immediately before the assertion rather than relying on the seed. An
+-- earlier check in this file inserts a trade for A to prove own-writes work,
+-- and that trade defaults to 'manual' — so a badge test that depended on the
+-- seed's state was testing the order of this file, not the badge.
+reset role;
+update public.trades set source = 'mt5'
+  where user_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+set role authenticated;
+
+select record('leaderboard: reports the synced badge',
+  (public.leaderboard()->'entries'->0->>'verified')::boolean,
+  'all trades came from a sync');
+
+-- One hand-entered trade changes the numbers, so it must remove the badge.
+--
+-- Seeded as the owner, not as B: B cannot write A's trades, and the attempt
+-- rightly fails RLS. Adding data on someone else's behalf is a job for the
+-- harness, not for the tenant under test — which is the whole point of the
+-- rest of this file.
+reset role;
+insert into public.trades (user_id, symbol, side, pnl, fees, traded_at, closed_at, status, source)
+values ('aaaaaaaa-0000-0000-0000-000000000001', 'EURUSD', 'Long', 100, 0,
+        now(), now(), 'closed', 'manual');
+set role authenticated;
+
+select record('leaderboard: one manual trade removes the badge',
+  not (public.leaderboard()->'entries'->0->>'verified')::boolean,
+  'a self-reported trade was counted as verified');
+
+-- Opting out must remove the entry entirely and immediately. Also done as the
+-- harness rather than as B, for the same reason.
+reset role;
+update public.community_profiles set on_leaderboard = false
+  where user_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+set role authenticated;
+
+select record('leaderboard: opting out removes you at once',
+  jsonb_array_length(public.leaderboard()->'entries') = 0,
+  jsonb_array_length(public.leaderboard()->'entries')::text || ' entries');
+
+reset role;
+update public.community_profiles set on_leaderboard = true
+  where user_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+set role authenticated;
+
+-- Reporting must work for a normal user, and must not be forgeable.
+do $$
+declare sid uuid;
+begin
+  select id into sid from public.shared_setups limit 1;
+  insert into public.content_reports (setup_id, reason) values (sid, 'spam');
+  perform record('B: can report a setup', true, 'reporter_id defaulted from the token');
+exception when others then
+  perform record('B: can report a setup', false, SQLERRM);
+end $$;
+
+do $$
+begin
+  insert into public.content_reports (reporter_id, setup_id, reason)
+  values ('aaaaaaaa-0000-0000-0000-000000000001',
+          (select id from public.shared_setups limit 1), 'abusive');
+  perform record('B: cannot report AS someone else', false, 'insert succeeded');
+exception when others then
+  perform record('B: cannot report AS someone else', true, 'refused');
+end $$;
+
 -- ── Billing ───────────────────────────────────────────────────────────────
 -- The whole of phase 11 rests on a user being unable to write their own plan.
 -- If any of the next four checks fails, the product is free to anyone who
@@ -431,6 +650,51 @@ select record('anon: no backtests', count(*) = 0, 'saw ' || count(*))
   from public.backtest_sessions;
 select record('anon: no subscriptions', count(*) = 0, 'saw ' || count(*))
   from public.subscriptions;
+select record('anon: no community profiles', count(*) = 0, 'saw ' || count(*))
+  from public.community_profiles;
+select record('anon: no setups', count(*) = 0, 'saw ' || count(*))
+  from public.shared_setups;
+
+-- Participants opted into being seen by other traders, not by the internet.
+--
+-- EXECUTE is granted by database ROLE, not by JWT claim, so these have to
+-- actually become `anon` — clearing the claim while still connected as
+-- `authenticated` tests nothing about the grant. This is the one place in this
+-- file where the distinction matters, and it cost two false failures to find.
+set role anon;
+
+do $$
+begin
+  perform public.leaderboard();
+  perform record('anon: cannot read the leaderboard', false, 'the function ran');
+exception when insufficient_privilege then
+  perform record('anon: cannot read the leaderboard', true, 'refused');
+when others then
+  perform record('anon: cannot read the leaderboard', true, 'refused: ' || SQLERRM);
+end $$;
+
+do $$
+begin
+  perform public.browse_setups();
+  perform record('anon: cannot browse setups', false, 'the function ran');
+exception when insufficient_privilege then
+  perform record('anon: cannot browse setups', true, 'refused');
+when others then
+  perform record('anon: cannot browse setups', true, 'refused: ' || SQLERRM);
+end $$;
+
+-- The share function is the deliberate exception: it is granted to anon
+-- because a share link is meant to work without an account. Checked here so
+-- the contrast is explicit rather than accidental.
+do $$
+begin
+  perform public.shared_view('VIEW-LIVE');
+  perform record('anon: CAN use a share link', true, 'as intended');
+exception when others then
+  perform record('anon: CAN use a share link', false, 'refused: ' || SQLERRM);
+end $$;
+
+set role authenticated;
 
 -- ── The share function, called anonymously ────────────────────────────────
 -- This is the one path by which a stranger reads someone else's data, so it

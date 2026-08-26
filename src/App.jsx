@@ -14,6 +14,7 @@ import ComingSoon from './pages/ComingSoon'
 import AIReport from './pages/AIReport'
 import Backtesting from './pages/Backtesting'
 import Funded from './pages/Funded'
+import Community from './pages/Community'
 import Login from './pages/Login'
 import SharedView from './pages/SharedView'
 import { useTrades } from './lib/useTrades'
@@ -103,6 +104,7 @@ function Journalized({ userId }) {
             {view === 'ai-report' && <AIReport trades={trades} />}
             {view === 'funded' && <Funded trades={trades} brokerAccounts={brokerAccounts.accounts} />}
             {view === 'backtesting' && <Backtesting trades={trades} />}
+            {view === 'community' && <Community trades={trades} />}
             {view === 'tools' && <Tools />}
             {view === 'settings' && <Settings trades={trades} onClearAll={clearAllTrades} brokerAccounts={brokerAccounts} />}
             {!current?.ready && <ComingSoon view={current} />}

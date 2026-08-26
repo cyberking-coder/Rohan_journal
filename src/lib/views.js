@@ -67,9 +67,8 @@ export const VIEWS = [
     key: 'community',
     label: 'Community',
     icon: '◇',
-    ready: false,
-    phase: 10,
-    description: 'Traders lounge, leaderboard and shared setups.',
+    ready: true,
+    description: 'Leaderboard and published setups, opt-in and anonymous.',
   },
   {
     key: 'tools',
