@@ -96,6 +96,12 @@ insert into public.candles (user_id, symbol, timeframe, t, o, h, l, c) values
 insert into public.economic_events (event_at, currency, title) values
   (now(), 'USD', 'CPI YoY');
 
+-- A paid subscription for A. Written as the owner, which is what the webhook's
+-- service role does — there is deliberately no other way for a row to exist.
+insert into public.subscriptions (user_id, plan, status, stripe_customer_id, current_period_end)
+values ('aaaaaaaa-0000-0000-0000-000000000001', 'premium', 'active', 'cus_A',
+        now() + interval '30 days');
+
 -- A prop challenge each. The rules are not secret in the way a password is,
 -- but they say which firm a trader is with, at what size, and how close to
 -- failing — which is exactly the kind of thing a rival account holder should
@@ -324,6 +330,47 @@ select record('B: cannot see A''s share links', count(*) = 0, 'saw ' || count(*)
 select record('B: sees only own funded account', count(*) = 1, 'saw ' || count(*))
   from public.funded_accounts;
 
+-- ── Billing ───────────────────────────────────────────────────────────────
+-- The whole of phase 11 rests on a user being unable to write their own plan.
+-- If any of the next four checks fails, the product is free to anyone who
+-- opens the network tab.
+select record('B: cannot see A''s subscription', count(*) = 0, 'saw ' || count(*))
+  from public.subscriptions;
+
+do $$
+begin
+  insert into public.subscriptions (user_id, plan, status)
+  values ('bbbbbbbb-0000-0000-0000-000000000002', 'premium', 'active');
+  perform record('B: cannot grant themselves a plan', false, 'insert succeeded');
+exception when others then
+  perform record('B: cannot grant themselves a plan', true, 'refused');
+end $$;
+
+do $$
+declare n int;
+begin
+  update public.subscriptions set plan = 'premium';
+  get diagnostics n = row_count;
+  perform record('B: cannot upgrade any subscription', n = 0, n || ' row(s) updated');
+exception when others then
+  perform record('B: cannot upgrade any subscription', true, 'refused: ' || SQLERRM);
+end $$;
+
+do $$
+declare n int;
+begin
+  delete from public.subscriptions;
+  get diagnostics n = row_count;
+  perform record('B: cannot delete a subscription', n = 0, n || ' row(s) deleted');
+exception when others then
+  perform record('B: cannot delete a subscription', true, 'refused: ' || SQLERRM);
+end $$;
+
+-- The idempotency ledger holds no user data, and nothing but the service role
+-- has any business reading it.
+select record('B: cannot read the Stripe event log', count(*) = 0, 'saw ' || count(*))
+  from public.stripe_events;
+
 -- A saved backtest is a strategy. Reading someone else's is reading their
 -- edge, which is the one thing a trader would least like shared.
 select record('B: sees only own backtests', count(*) = 1, 'saw ' || count(*))
@@ -382,6 +429,8 @@ select record('anon: no funded accounts', count(*) = 0, 'saw ' || count(*))
   from public.funded_accounts;
 select record('anon: no backtests', count(*) = 0, 'saw ' || count(*))
   from public.backtest_sessions;
+select record('anon: no subscriptions', count(*) = 0, 'saw ' || count(*))
+  from public.subscriptions;
 
 -- ── The share function, called anonymously ────────────────────────────────
 -- This is the one path by which a stranger reads someone else's data, so it
@@ -480,15 +529,37 @@ select record(
 
 -- RLS enabled but with no policy at all denies everything — which fails
 -- closed, but usually means someone forgot the policies.
+--
+-- `stripe_events` is the deliberate exception: it is the webhook's idempotency
+-- ledger, holds no user data, and nothing but the service role has any reason
+-- to touch it. Deny-all is the intended state.
+--
+-- Listing it explicitly rather than relaxing the rule is the point. A blanket
+-- "some tables may have no policies" turns a check that catches a real and
+-- common mistake — enabling RLS and forgetting the policies — into one that
+-- catches nothing, and the next table to arrive that way would pass silently.
 select record(
   'every RLS table has at least one policy',
   not exists (
     select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity
-      and c.relname not in ('audit_results')
+      and c.relname not in ('audit_results', 'stripe_events')
       and not exists (select 1 from pg_policy p where p.polrelid = c.oid)
   ),
   'ok'
+);
+
+-- And the exception is itself checked, so it cannot quietly acquire a policy
+-- that opens it up.
+select record(
+  'stripe_events is deny-all by design',
+  (select c.relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relname = 'stripe_events')
+  and not exists (
+    select 1 from pg_policy p join pg_class c on c.oid = p.polrelid
+    where c.relname = 'stripe_events'
+  ),
+  'RLS on, no policies'
 );
 
 \set QUIET off

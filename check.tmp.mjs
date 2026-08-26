@@ -3,18 +3,16 @@ const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', a
 const p = await b.newPage({ viewport: { width: 1280, height: 1000 } })
 const errs = []; p.on('pageerror', e => errs.push(String(e)))
 p.on('console', m => m.type()==='error' && !/ERR_CONNECTION/.test(m.text()) && errs.push(m.text()))
-await p.goto('http://localhost:4173/?view=analysis', { waitUntil: 'networkidle' })
-await p.evaluate(() => {
-  const mk=(i,sym,pnl)=>({id:'x'+i,symbol:sym,side:'Long',pnl,fees:0,entry:1,exit:1,qty:0.1,
-    traded_at:new Date(Date.UTC(2026,7,10+i%8,12,0)).toISOString()})
-  localStorage.setItem('forex_greek_trades', JSON.stringify([
-    mk(1,'EURUSD.pro',300), mk(2,'EURUSD.m',-100), mk(3,'EURUSD',200),
-    mk(4,'XAUUSD.s',150), mk(5,'GOLD',-50)]))
-})
-await p.reload({ waitUntil: 'networkidle' }); await p.waitForTimeout(1500)
+await p.goto('http://localhost:4173/?view=settings&tab=billing', { waitUntil: 'networkidle' })
+await p.waitForTimeout(1600)
 const txt = await p.evaluate(()=>document.body.textContent)
-const j = txt.indexOf('Top Symbols')
-console.log('TOP SYMBOLS:\n' + (j<0?'[MISSING]':txt.slice(j, j+180)))
-console.log('has EURUSD.pro as separate row:', /EURUSD\.PRO|EURUSDPRO/.test(txt))
+const j = txt.indexOf('Plans')
+console.log(j<0 ? '[MISSING]' : txt.slice(j, j+780))
+console.log('---')
+console.log('upgrade buttons:', await p.locator('button', { hasText: /^Upgrade to/ }).count())
+console.log('manage billing shown:', await p.locator('button', { hasText: 'Manage billing' }).count())
+console.log('OVERFLOW:', await p.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth))
+await p.setViewportSize({width:390,height:800}); await p.waitForTimeout(600)
+console.log('MOBILE OVERFLOW:', await p.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth))
 console.log('ERRORS:', errs.slice(0,2))
 await b.close()

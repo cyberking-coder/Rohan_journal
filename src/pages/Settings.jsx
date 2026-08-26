@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { PageHeader } from '../components/common'
 import { Sensitive } from '../components/Money'
@@ -17,7 +17,8 @@ import PrivacyPanel from '../components/PrivacyPanel'
 import { useShares } from '../lib/useShares'
 import { useFundedAccounts } from '../lib/useFundedAccounts'
 import { useBacktestSessions } from '../lib/useBacktestSessions'
-import { DEFAULT_PLAN, usageFrom } from '../lib/plans'
+import { usageFrom } from '../lib/plans'
+import { useSubscription } from '../lib/useSubscription'
 import PlanTable from '../components/PlanTable'
 
 const TABS = [
@@ -325,6 +326,22 @@ function BillingTab({ trades = [], brokerAccounts = [] }) {
   const { sessions } = useBacktestSessions(user?.id)
   const { accounts: funded } = useFundedAccounts(user?.id)
   const { shares } = useShares(user?.id)
+  const { plan, subscription, ready, error, checkout, openPortal, refresh } = useSubscription(user?.id)
+  const [busy, setBusy] = useState(null)
+
+  // Stripe sends the customer back here after checkout. The webhook usually
+  // lands first, but not always — so the return is treated as a hint to
+  // re-read rather than as proof of anything, and the plan on screen still
+  // comes from the database.
+  useEffect(() => {
+    const outcome = new URLSearchParams(window.location.search).get('checkout')
+    if (outcome !== 'success') return
+    const timers = [1000, 3000, 7000].map((ms) => setTimeout(refresh, ms))
+    return () => timers.forEach(clearTimeout)
+  }, [refresh])
+
+  const start = async (id) => { setBusy(id); await checkout(id); setBusy(null) }
+  const portal = async () => { setBusy('portal'); await openPortal(); setBusy(null) }
 
   // Counted from what actually exists rather than from a stored counter. A
   // usage number that drifts from reality is how people get billed for things
@@ -339,7 +356,16 @@ function BillingTab({ trades = [], brokerAccounts = [] }) {
 
   return (
     <Section title="Plans">
-      <PlanTable current={DEFAULT_PLAN} usage={usage} />
+      <PlanTable
+        current={plan}
+        usage={usage}
+        subscription={subscription}
+        configured={ready}
+        error={error}
+        busy={busy}
+        onCheckout={start}
+        onPortal={portal}
+      />
     </Section>
   )
 }

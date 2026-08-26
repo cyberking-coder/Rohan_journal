@@ -20,6 +20,7 @@ was applied, just run it again.
 | 12 | `funded.sql` | `funded_accounts` — prop-firm challenge rules. Balances and pass/fail are derived from trades, never stored. | Optional; only needed for the Funded page. |
 | 13 | `tags.sql` | `trades.tags` plus its GIN index, and the `shared_view()` update that gates tags behind the journal section. | Optional; the tag UI is inert without it. |
 | 14 | `comparison.sql` | `backtest_sessions.costs` — what a saved replay cost to trade, so its figures can be read honestly later. | Optional; only needed for backtest-vs-live. |
+| 15 | `billing.sql` | `subscriptions` and `stripe_events` — Phase 11. Read-only to clients by design; see `docs/BILLING.md`. | Only if you take payment. |
 
 `enable-auth.sql` and `migrate-numeric.sql` are one-off fixes from earlier in
 the project's life. Only run them if the file's own comments describe a problem
