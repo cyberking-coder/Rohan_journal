@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { PageHeader } from '../components/common'
 import { PLANS, priceFor } from '../lib/plans'
+import { startCheckout, useSubscription } from '../lib/billing'
 
 // The public pricing page. Layout mirrors the reference: a small "PRICING"
 // pill, big heading, Yearly/Monthly toggle, then three cards with the
@@ -11,8 +12,20 @@ import { PLANS, priceFor } from '../lib/plans'
 // future gating logic. Checkout is not wired yet — the CTA calls an onSelect
 // prop; the parent can route it to Stripe once billing is set up.
 
-export default function Pricing({ currentPlan = 'free', onSelect } = {}) {
+export default function Pricing() {
   const [billing, setBilling] = useState('yearly')
+  const [pendingPlan, setPendingPlan] = useState(null)
+  const [error, setError] = useState(null)
+  const { sub } = useSubscription()
+  const currentPlan = sub?.plan ?? 'free'
+
+  const onSelect = async (planId) => {
+    if (planId === 'free' || planId === currentPlan) return
+    setError(null); setPendingPlan(planId)
+    const { error } = await startCheckout({ plan: planId, billing })
+    if (error) { setError(error); setPendingPlan(null) }
+    // On success the browser is already redirecting to Stripe.
+  }
 
   return (
     <div>
@@ -38,10 +51,19 @@ export default function Pricing({ currentPlan = 'free', onSelect } = {}) {
             plan={plan}
             billing={billing}
             isCurrent={currentPlan === plan.id}
-            onSelect={() => onSelect?.(plan.id, billing)}
+            isPending={pendingPlan === plan.id}
+            onSelect={() => onSelect(plan.id)}
           />
         ))}
       </div>
+
+      {error && (
+        <div style={{
+          maxWidth: 640, margin: '18px auto 0', padding: '10px 14px',
+          borderRadius: 10, fontSize: 13, textAlign: 'center',
+          background: 'rgba(255,107,107,0.09)', border: '1px solid rgba(255,107,107,0.3)', color: 'var(--red)',
+        }}>{error}</div>
+      )}
 
       <div style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 12.5, marginTop: 26 }}>
         All prices in USD. Cancel or change plan anytime. Cloud sync counts one broker account per connection.
@@ -89,10 +111,10 @@ function ToggleButton({ active, onClick, children }) {
 
 /* ── Plan card ──────────────────────────────────────────────────────────── */
 
-function PlanCard({ plan, billing, isCurrent, onSelect }) {
+function PlanCard({ plan, billing, isCurrent, isPending, onSelect }) {
   const price = priceFor(plan, billing)
   const isPopular = plan.popular
-  const cta = isCurrent ? 'Current Plan' : plan.cta
+  const cta = isCurrent ? 'Current Plan' : isPending ? 'Redirecting…' : plan.cta
 
   return (
     <motion.div
@@ -147,7 +169,7 @@ function PlanCard({ plan, billing, isCurrent, onSelect }) {
 
       <button
         onClick={onSelect}
-        disabled={isCurrent}
+        disabled={isCurrent || isPending || plan.id === 'free'}
         style={{
           marginTop: 22, padding: '13px 16px', borderRadius: 12,
           border: 'none', cursor: isCurrent ? 'default' : 'pointer', width: '100%',
