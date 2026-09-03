@@ -1,14 +1,13 @@
-// Creates a PayPal subscription for the signed-in user and returns the
-// PayPal-hosted approval URL. The browser redirects there; on approval
-// PayPal sends the user back to ${APP_URL}?checkout=success and fires
-// BILLING.SUBSCRIPTION.ACTIVATED at the webhook.
+// Creates a Dodo Payments subscription for the signed-in user and returns
+// the hosted checkout URL. The browser redirects there; Dodo calls the
+// webhook when the subscription goes active.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
-import { cors, json, paypal, planIdFor } from '../_shared/paypal.ts'
+import { cors, dodo, json, productIdFor } from '../_shared/dodo.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const APP_URL = Deno.env.get('APP_URL') ?? 'https://rohan-journal.vercel.app'
+const APP_URL = (Deno.env.get('APP_URL') ?? 'https://rohan-journal.vercel.app').trim()
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -27,37 +26,51 @@ Deno.serve(async (req) => {
     if (!['pro', 'elite'].includes(plan)) return json({ error: 'invalid plan' }, 400)
     if (!['monthly', 'yearly'].includes(billing)) return json({ error: 'invalid billing' }, 400)
 
-    const planId = planIdFor(plan, billing)
+    const productId = productIdFor(plan, billing)
 
-    const sub = await paypal('/v1/billing/subscriptions', {
+    // Dodo needs a billing address. We hand over the minimum it accepts —
+    // country falls back to US if the user hasn't told us otherwise. The
+    // real address is collected on the hosted checkout page.
+    const created = await dodo('/subscriptions', {
       method: 'POST',
       body: JSON.stringify({
-        plan_id: planId,
-        custom_id: user.id,
-        subscriber: user.email ? { email_address: user.email } : undefined,
-        application_context: {
-          brand_name: 'Forex Greek Journal',
-          user_action: 'SUBSCRIBE_NOW',
-          shipping_preference: 'NO_SHIPPING',
-          return_url: `${APP_URL}?checkout=success&view=settings`,
-          cancel_url: `${APP_URL}?checkout=cancel&view=pricing`,
+        product_id: productId,
+        quantity: 1,
+        payment_link: true,
+        return_url: `${APP_URL}?checkout=success&view=settings`,
+        customer: {
+          email: user.email ?? undefined,
+          name: user.user_metadata?.full_name || user.email || 'Trader',
+        },
+        billing: {
+          country: 'US',
+          state: '',
+          city: '',
+          street: '',
+          zipcode: '',
+        },
+        metadata: {
+          user_id: user.id,
+          plan,
+          billing,
         },
       }),
     })
 
-    const approve = sub.links?.find((l: any) => l.rel === 'approve')?.href
-    if (!approve) return json({ error: 'no approval link from PayPal' }, 502)
+    const subscriptionId = created.subscription_id ?? created.id
+    const paymentLink = created.payment_link
+    if (!paymentLink || !subscriptionId) {
+      return json({ error: `dodo returned no payment link: ${JSON.stringify(created).slice(0, 300)}` }, 502)
+    }
 
-    // Stash the subscription id right away so the webhook can find the user
-    // when the ACTIVATED event arrives — subscribers race the webhook.
     await svc.from('subscriptions').upsert({
       user_id: user.id,
-      paypal_subscription_id: sub.id,
+      dodo_subscription_id: subscriptionId,
       plan: 'free',
       status: 'pending',
     })
 
-    return json({ url: approve, subscription_id: sub.id })
+    return json({ url: paymentLink, subscription_id: subscriptionId })
   } catch (e) {
     return json({ error: String(e?.message ?? e) }, 500)
   }
