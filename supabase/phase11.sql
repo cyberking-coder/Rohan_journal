@@ -1,0 +1,59 @@
+-- Phase 11 — PayPal subscriptions.
+--
+-- One row per user carrying their active plan, PayPal subscription id, and
+-- the subscription's lifecycle state. Written only by the PayPal webhook
+-- and the cancel/create Edge Functions (all service role). The browser
+-- reads its own row through my_subscription() so PayPal ids never surface
+-- to the anon key.
+
+create extension if not exists "pgcrypto";
+
+create table if not exists public.subscriptions (
+  user_id                uuid primary key references auth.users (id) on delete cascade,
+  paypal_subscription_id text,
+  paypal_payer_id        text,
+  plan                   text not null default 'free'
+                         check (plan in ('free','pro','elite')),
+  billing                text check (billing in ('monthly','yearly')),
+  status                 text not null default 'inactive',
+  current_period_end     timestamptz,
+  cancel_at_period_end   boolean not null default false,
+  updated_at             timestamptz not null default now()
+);
+
+create index if not exists subscriptions_paypal_sub_idx
+  on public.subscriptions (paypal_subscription_id);
+
+alter table public.subscriptions enable row level security;
+-- No user policies: service role only. Reads go through the RPC below.
+
+create or replace function public.my_subscription()
+returns table (
+  plan text,
+  billing text,
+  status text,
+  current_period_end timestamptz,
+  cancel_at_period_end boolean,
+  updated_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select plan, billing, status, current_period_end, cancel_at_period_end, updated_at
+  from public.subscriptions
+  where user_id = auth.uid();
+$$;
+
+revoke all on function public.my_subscription() from public;
+grant execute on function public.my_subscription() to authenticated;
+
+create or replace function public.subscriptions_touch()
+returns trigger language plpgsql as $$
+begin new.updated_at = now(); return new; end;
+$$;
+
+drop trigger if exists subscriptions_touch on public.subscriptions;
+create trigger subscriptions_touch
+  before update on public.subscriptions
+  for each row execute function public.subscriptions_touch();

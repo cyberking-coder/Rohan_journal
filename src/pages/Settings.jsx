@@ -7,6 +7,9 @@ import ShareLinks from '../components/ShareLinks'
 import { usePrefs } from '../lib/theme'
 import { useQueryParam } from '../lib/router'
 import BrokerAccounts from '../components/BrokerAccounts'
+import MetaApiConnect from '../components/MetaApiConnect'
+import { PLANS } from '../lib/plans'
+import { cancelSubscription, PAYPAL_MANAGE_URL, useSubscription } from '../lib/billing'
 import {
   CURRENCIES, CURRENCY_KEYS, TIMEZONE_GROUPS, formatMoney,
   resolveTimezone, timezoneCity, timezoneOffsetLabel,
@@ -182,6 +185,8 @@ function AccountsTab({ trades, brokerAccounts }) {
         onRemove={removeAccount}
       />
 
+      <MetaApiConnect />
+
       <Note>
         Syncing runs from <span className="mono">mt5_bridge/</span> on your own machine, pushing
         closed trades, open positions and your account balance here. Where it logs in, it uses your
@@ -310,15 +315,68 @@ function PreferencesTab({ trades, onClearAll }) {
 /* ── Billing tab ────────────────────────────────────────────────────────── */
 
 function BillingTab() {
+  const { sub, loading, refetch } = useSubscription()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  const plan = PLANS.find((p) => p.id === sub?.plan) ?? PLANS[0]
+  const isPaid = plan.id !== 'free'
+  const renewsAt = sub?.current_period_end ? new Date(sub.current_period_end) : null
+
+  const cancel = async () => {
+    if (!confirm('Cancel your subscription? You will keep access until the end of the current billing period.')) return
+    setBusy(true); setError(null)
+    const { error } = await cancelSubscription()
+    setBusy(false)
+    if (error) setError(error); else refetch()
+  }
+
   return (
-    <Section title="Billing">
-      <Empty>
-        This app has no paid tiers and takes no payment. The spec’s Free / Pro / Elite plans
-        need a Stripe account and a business behind them — that is phase 11, and only if you
-        decide this should become a multi-tenant product rather than your own journal.
-      </Empty>
+    <Section title="Billing" subtitle="Your plan, next renewal and payment method.">
+      <Row label="Current plan">
+        <ReadOnly>
+          {loading ? '…' : plan.name}
+          {sub?.billing ? ` · ${sub.billing}` : ''}
+          {sub?.status && sub.status !== 'active' && sub.status !== 'inactive' ? ` · ${sub.status}` : ''}
+        </ReadOnly>
+      </Row>
+
+      {isPaid && (
+        <Row label={sub.cancel_at_period_end ? 'Ends on' : 'Renews on'}>
+          <ReadOnly>{renewsAt ? renewsAt.toLocaleDateString() : '—'}</ReadOnly>
+        </Row>
+      )}
+
+      <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {isPaid ? (
+          <>
+            <a href={PAYPAL_MANAGE_URL} target="_blank" rel="noreferrer"
+              style={{ ...primaryButton, textDecoration: 'none', display: 'inline-block' }}>
+              Manage in PayPal
+            </a>
+            {!sub.cancel_at_period_end && (
+              <button onClick={cancel} disabled={busy} style={{ ...ghost, color: 'var(--red)', borderColor: 'rgba(255,107,107,0.3)' }}>
+                {busy ? 'Cancelling…' : 'Cancel subscription'}
+              </button>
+            )}
+          </>
+        ) : (
+          <a href="?view=pricing" style={{ ...primaryButton, textDecoration: 'none', display: 'inline-block' }}>
+            Upgrade plan
+          </a>
+        )}
+        <button onClick={refetch} style={ghost}>Refresh</button>
+      </div>
+
+      {error && (
+        <div style={{
+          marginTop: 12, padding: '10px 13px', borderRadius: 10, fontSize: 12.5,
+          background: 'rgba(255,107,107,0.09)', border: '1px solid rgba(255,107,107,0.3)', color: 'var(--red)',
+        }}>{error}</div>
+      )}
+
       <Note>
-        Nothing here is charged, metered or limited. Every feature that exists is available.
+        Payments are handled by PayPal. Change payment method or view invoices from your PayPal account.
       </Note>
     </Section>
   )
@@ -470,4 +528,9 @@ const control = {
 const ghost = {
   padding: '8px 14px', borderRadius: 10, fontSize: 12.5, fontWeight: 600,
   color: 'var(--text-2)', border: '1px solid var(--stroke)', background: 'var(--card-2)',
+}
+
+const primaryButton = {
+  padding: '9px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+  background: 'var(--mint)', color: '#001512', fontWeight: 600, fontSize: 13,
 }
