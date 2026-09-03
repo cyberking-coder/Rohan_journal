@@ -9,7 +9,7 @@ import { useQueryParam } from '../lib/router'
 import BrokerAccounts from '../components/BrokerAccounts'
 import MetaApiConnect from '../components/MetaApiConnect'
 import { PLANS } from '../lib/plans'
-import { openBillingPortal, useSubscription } from '../lib/billing'
+import { cancelSubscription, PAYPAL_MANAGE_URL, useSubscription } from '../lib/billing'
 import {
   CURRENCIES, CURRENCY_KEYS, TIMEZONE_GROUPS, formatMoney,
   resolveTimezone, timezoneCity, timezoneOffsetLabel,
@@ -323,10 +323,12 @@ function BillingTab() {
   const isPaid = plan.id !== 'free'
   const renewsAt = sub?.current_period_end ? new Date(sub.current_period_end) : null
 
-  const manage = async () => {
+  const cancel = async () => {
+    if (!confirm('Cancel your subscription? You will keep access until the end of the current billing period.')) return
     setBusy(true); setError(null)
-    const { error } = await openBillingPortal()
-    if (error) { setError(error); setBusy(false) }
+    const { error } = await cancelSubscription()
+    setBusy(false)
+    if (error) setError(error); else refetch()
   }
 
   return (
@@ -347,9 +349,17 @@ function BillingTab() {
 
       <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         {isPaid ? (
-          <button onClick={manage} disabled={busy} style={primaryButton}>
-            {busy ? 'Opening…' : 'Manage subscription'}
-          </button>
+          <>
+            <a href={PAYPAL_MANAGE_URL} target="_blank" rel="noreferrer"
+              style={{ ...primaryButton, textDecoration: 'none', display: 'inline-block' }}>
+              Manage in PayPal
+            </a>
+            {!sub.cancel_at_period_end && (
+              <button onClick={cancel} disabled={busy} style={{ ...ghost, color: 'var(--red)', borderColor: 'rgba(255,107,107,0.3)' }}>
+                {busy ? 'Cancelling…' : 'Cancel subscription'}
+              </button>
+            )}
+          </>
         ) : (
           <a href="?view=pricing" style={{ ...primaryButton, textDecoration: 'none', display: 'inline-block' }}>
             Upgrade plan
@@ -366,7 +376,7 @@ function BillingTab() {
       )}
 
       <Note>
-        Payments are handled by Stripe. Manage cards, invoices and cancellation from the Stripe portal.
+        Payments are handled by PayPal. Change payment method or view invoices from your PayPal account.
       </Note>
     </Section>
   )

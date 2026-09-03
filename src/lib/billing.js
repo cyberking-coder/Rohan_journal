@@ -1,12 +1,16 @@
-// Client wrapper for the Stripe checkout, portal and subscription-read flows.
+// Client wrapper for the PayPal subscription flows.
 // All heavy lifting is in Edge Functions; the browser only knows plan names.
 
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, isSupabaseConfigured } from './supabase.js'
 
+// PayPal account page where users can view/manage their auto-payments.
+// PayPal has no per-merchant hosted portal, so we point at their own page.
+export const PAYPAL_MANAGE_URL = 'https://www.paypal.com/myaccount/autopay/'
+
 export async function startCheckout({ plan, billing }) {
   if (!isSupabaseConfigured) return { error: 'Supabase is not configured' }
-  const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+  const { data, error } = await supabase.functions.invoke('create-subscription', {
     body: { plan, billing },
   })
   if (error) return { error: data?.error || error.message }
@@ -15,19 +19,15 @@ export async function startCheckout({ plan, billing }) {
     window.location.href = data.url
     return { error: null }
   }
-  return { error: 'No checkout URL returned' }
+  return { error: 'No approval URL returned' }
 }
 
-export async function openBillingPortal() {
+export async function cancelSubscription() {
   if (!isSupabaseConfigured) return { error: 'Supabase is not configured' }
-  const { data, error } = await supabase.functions.invoke('create-billing-portal', { body: {} })
+  const { data, error } = await supabase.functions.invoke('cancel-subscription', { body: {} })
   if (error) return { error: data?.error || error.message }
   if (data?.error) return { error: data.error }
-  if (data?.url) {
-    window.location.href = data.url
-    return { error: null }
-  }
-  return { error: 'No portal URL returned' }
+  return { error: null }
 }
 
 /**

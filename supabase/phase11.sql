@@ -1,17 +1,17 @@
--- Phase 11 — Stripe subscriptions.
+-- Phase 11 — PayPal subscriptions.
 --
--- One row per user carrying their active plan, Stripe customer id, and the
--- subscription's lifecycle state. The row is written only by the Stripe
--- webhook (running as service role); the browser reads its own row through
--- a security-definer function so no ciphertext or Stripe ids leak into the
--- anon key surface.
+-- One row per user carrying their active plan, PayPal subscription id, and
+-- the subscription's lifecycle state. Written only by the PayPal webhook
+-- and the cancel/create Edge Functions (all service role). The browser
+-- reads its own row through my_subscription() so PayPal ids never surface
+-- to the anon key.
 
 create extension if not exists "pgcrypto";
 
 create table if not exists public.subscriptions (
   user_id                uuid primary key references auth.users (id) on delete cascade,
-  stripe_customer_id     text,
-  stripe_subscription_id text,
+  paypal_subscription_id text,
+  paypal_payer_id        text,
   plan                   text not null default 'free'
                          check (plan in ('free','pro','elite')),
   billing                text check (billing in ('monthly','yearly')),
@@ -21,10 +21,8 @@ create table if not exists public.subscriptions (
   updated_at             timestamptz not null default now()
 );
 
-create index if not exists subscriptions_customer_idx
-  on public.subscriptions (stripe_customer_id);
-create index if not exists subscriptions_stripe_sub_idx
-  on public.subscriptions (stripe_subscription_id);
+create index if not exists subscriptions_paypal_sub_idx
+  on public.subscriptions (paypal_subscription_id);
 
 alter table public.subscriptions enable row level security;
 -- No user policies: service role only. Reads go through the RPC below.
