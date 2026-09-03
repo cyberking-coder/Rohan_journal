@@ -10,6 +10,7 @@ import BrokerAccounts from '../components/BrokerAccounts'
 import MetaApiConnect from '../components/MetaApiConnect'
 import { PLANS } from '../lib/plans'
 import { cancelSubscription, useSubscription } from '../lib/billing'
+import PlanBadge from '../components/PlanBadge'
 import {
   CURRENCIES, CURRENCY_KEYS, TIMEZONE_GROUPS, formatMoney,
   resolveTimezone, timezoneCity, timezoneOffsetLabel,
@@ -88,6 +89,7 @@ function ProfileCard() {
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
           <span style={{ fontFamily: 'var(--display)', fontSize: 19, fontWeight: 700 }}>{name}</span>
+          <PlanBadge size="md" />
           <span style={{
             fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 7px', borderRadius: 5,
             color: profileVisibility === 'public' ? 'var(--mint)' : 'var(--text-3)',

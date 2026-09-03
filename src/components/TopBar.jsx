@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../lib/AuthContext'
 import { useTheme } from '../lib/theme'
 import { getView } from '../lib/views'
+import PlanBadge from './PlanBadge'
 
 // The global bar that sits above every page: section title, ⌘K search,
 // theme toggle, quick-add, live clock, notifications and the profile menu.
@@ -156,7 +157,8 @@ function ProfileMenu() {
   }
 
   return (
-    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <PlanBadge />
       <button onClick={() => setOpen((o) => !o)} title={name} aria-label="Account menu"
         style={{ display: 'block', borderRadius: '50%' }}>
         {avatar ? (
@@ -176,7 +178,10 @@ function ProfileMenu() {
         {open && (
           <Dropdown>
             <div style={{ padding: '13px 14px', borderBottom: '1px solid var(--stroke)' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+                <PlanBadge />
+              </div>
               <div style={{ fontSize: 11, color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email}</div>
             </div>
             <div style={{ padding: 6 }}>
