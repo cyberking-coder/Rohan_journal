@@ -1,9 +1,9 @@
-// Cancels the signed-in user's PayPal subscription. PayPal doesn't offer a
-// Stripe-style hosted portal, so the app runs the cancel itself and points
-// the user at their PayPal account for anything else (change card, etc.).
+// Cancels the signed-in user's Dodo Payments subscription. The user keeps
+// access until the end of the current billing period; the webhook confirms
+// with a subscription.cancelled event.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
-import { cors, json, paypal } from '../_shared/paypal.ts'
+import { cors, dodo, json } from '../_shared/dodo.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -18,23 +18,20 @@ Deno.serve(async (req) => {
     const { data: u, error: uErr } = await svc.auth.getUser(auth.slice(7))
     if (uErr || !u?.user) return json({ error: 'unauthorised' }, 401)
 
-    const body = await req.json().catch(() => ({}))
-    const reason = String(body?.reason ?? 'user requested cancellation').slice(0, 128)
-
     const { data: sub } = await svc.from('subscriptions')
-      .select('paypal_subscription_id, status')
+      .select('dodo_subscription_id, status')
       .eq('user_id', u.user.id).maybeSingle()
-    if (!sub?.paypal_subscription_id) return json({ error: 'no active subscription' }, 400)
+    if (!sub?.dodo_subscription_id) return json({ error: 'no active subscription' }, 400)
     if (['cancelled', 'expired'].includes(sub.status ?? '')) {
       return json({ ok: true, already: true })
     }
 
-    await paypal(`/v1/billing/subscriptions/${sub.paypal_subscription_id}/cancel`, {
-      method: 'POST',
-      body: JSON.stringify({ reason }),
+    // Dodo cancels at period end by default when you PATCH with a cancel flag.
+    await dodo(`/subscriptions/${sub.dodo_subscription_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ cancel_at_next_billing_date: true }),
     })
 
-    // Reflect eagerly; the webhook will confirm.
     await svc.from('subscriptions').update({
       cancel_at_period_end: true,
     }).eq('user_id', u.user.id)

@@ -1,17 +1,18 @@
--- Phase 11 — PayPal subscriptions.
+-- Phase 11 — Dodo Payments subscriptions.
 --
--- One row per user carrying their active plan, PayPal subscription id, and
--- the subscription's lifecycle state. Written only by the PayPal webhook
--- and the cancel/create Edge Functions (all service role). The browser
--- reads its own row through my_subscription() so PayPal ids never surface
--- to the anon key.
+-- One row per user carrying their active plan, Dodo customer/subscription
+-- ids, and the subscription's lifecycle state. Written only by the Dodo
+-- webhook and the cancel/create Edge Functions (all service role). The
+-- browser reads its own row through my_subscription() so provider ids
+-- never surface to the anon key.
+--
+-- Safe to re-run: it drops earlier PayPal columns if they exist and adds
+-- the Dodo columns idempotently.
 
 create extension if not exists "pgcrypto";
 
 create table if not exists public.subscriptions (
   user_id                uuid primary key references auth.users (id) on delete cascade,
-  paypal_subscription_id text,
-  paypal_payer_id        text,
   plan                   text not null default 'free'
                          check (plan in ('free','pro','elite')),
   billing                text check (billing in ('monthly','yearly')),
@@ -21,8 +22,17 @@ create table if not exists public.subscriptions (
   updated_at             timestamptz not null default now()
 );
 
-create index if not exists subscriptions_paypal_sub_idx
-  on public.subscriptions (paypal_subscription_id);
+alter table public.subscriptions add column if not exists dodo_subscription_id text;
+alter table public.subscriptions add column if not exists dodo_customer_id     text;
+
+-- Drop legacy PayPal / Stripe columns if the earlier phase11 was applied.
+alter table public.subscriptions drop column if exists paypal_subscription_id;
+alter table public.subscriptions drop column if exists paypal_payer_id;
+alter table public.subscriptions drop column if exists stripe_customer_id;
+alter table public.subscriptions drop column if exists stripe_subscription_id;
+
+create index if not exists subscriptions_dodo_sub_idx
+  on public.subscriptions (dodo_subscription_id);
 
 alter table public.subscriptions enable row level security;
 -- No user policies: service role only. Reads go through the RPC below.

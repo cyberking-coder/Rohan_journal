@@ -1,12 +1,8 @@
-// Client wrapper for the PayPal subscription flows.
+// Client wrapper for the Dodo Payments subscription flows.
 // All heavy lifting is in Edge Functions; the browser only knows plan names.
 
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, isSupabaseConfigured } from './supabase.js'
-
-// PayPal account page where users can view/manage their auto-payments.
-// PayPal has no per-merchant hosted portal, so we point at their own page.
-export const PAYPAL_MANAGE_URL = 'https://www.paypal.com/myaccount/autopay/'
 
 export async function startCheckout({ plan, billing }) {
   if (!isSupabaseConfigured) return { error: 'Supabase is not configured' }
@@ -19,7 +15,7 @@ export async function startCheckout({ plan, billing }) {
     window.location.href = data.url
     return { error: null }
   }
-  return { error: 'No approval URL returned' }
+  return { error: 'No checkout URL returned' }
 }
 
 export async function cancelSubscription() {

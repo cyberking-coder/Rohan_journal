@@ -9,7 +9,7 @@ import { useQueryParam } from '../lib/router'
 import BrokerAccounts from '../components/BrokerAccounts'
 import MetaApiConnect from '../components/MetaApiConnect'
 import { PLANS } from '../lib/plans'
-import { cancelSubscription, PAYPAL_MANAGE_URL, useSubscription } from '../lib/billing'
+import { cancelSubscription, useSubscription } from '../lib/billing'
 import {
   CURRENCIES, CURRENCY_KEYS, TIMEZONE_GROUPS, formatMoney,
   resolveTimezone, timezoneCity, timezoneOffsetLabel,
@@ -350,14 +350,14 @@ function BillingTab() {
       <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         {isPaid ? (
           <>
-            <a href={PAYPAL_MANAGE_URL} target="_blank" rel="noreferrer"
-              style={{ ...primaryButton, textDecoration: 'none', display: 'inline-block' }}>
-              Manage in PayPal
-            </a>
-            {!sub.cancel_at_period_end && (
+            {!sub.cancel_at_period_end ? (
               <button onClick={cancel} disabled={busy} style={{ ...ghost, color: 'var(--red)', borderColor: 'rgba(255,107,107,0.3)' }}>
                 {busy ? 'Cancelling…' : 'Cancel subscription'}
               </button>
+            ) : (
+              <span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
+                Cancels at the end of the current period.
+              </span>
             )}
           </>
         ) : (
@@ -376,7 +376,8 @@ function BillingTab() {
       )}
 
       <Note>
-        Payments are handled by PayPal. Change payment method or view invoices from your PayPal account.
+        Payments are handled by Dodo Payments (merchant of record). Receipts arrive by email;
+        change payment method through the link in the latest receipt.
       </Note>
     </Section>
   )
