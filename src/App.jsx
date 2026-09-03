@@ -15,6 +15,9 @@ import AIReport from './pages/AIReport'
 import Backtesting from './pages/Backtesting'
 import Funded from './pages/Funded'
 import Pricing from './pages/Pricing'
+import PlanGate from './components/PlanGate'
+import { useSubscription } from './lib/billing'
+import { limitsFor, tradesThisMonth } from './lib/plans'
 import Login from './pages/Login'
 import SharedView from './pages/SharedView'
 import { useTrades } from './lib/useTrades'
@@ -50,10 +53,23 @@ function Journalized({ userId }) {
   const [editing, setEditing] = useState(null)
   const { trades, loading, error, addTrade, updateTrade, deleteTrade, clearAllTrades, isSupabaseConfigured } = useTrades(userId)
   const brokerAccounts = useBrokerAccounts(userId)
+  const { sub } = useSubscription()
+  const limits = limitsFor(sub?.plan ?? 'free')
+  const monthCount = tradesThisMonth(trades)
+  const atFreeCap = monthCount >= limits.tradesPerMonth
 
   const openForm = useCallback(() => { setEditing(null); setFormOpen(true) }, [])
   const openEdit = (trade) => { setEditing(trade); setFormOpen(true) }
-  const submitTrade = (record) => (editing ? updateTrade(editing.id, record) : addTrade(record))
+  const submitTrade = (record) => {
+    // Free plan is capped to N new trades per month. Editing an existing
+    // trade doesn't count against the cap.
+    if (!editing && atFreeCap) {
+      return Promise.reject(new Error(
+        `Free plan is limited to ${limits.tradesPerMonth} trades per month. Upgrade to Pro for unlimited.`,
+      ))
+    }
+    return editing ? updateTrade(editing.id, record) : addTrade(record)
+  }
 
   // ⌘K / Ctrl-K opens the palette from anywhere.
   useEffect(() => {
@@ -85,6 +101,26 @@ function Journalized({ userId }) {
           Couldn't load your trades: {error}. Make sure the database schema has been applied in Supabase.
         </div>
       )}
+      {Number.isFinite(limits.tradesPerMonth) && (
+        <div style={{
+          marginBottom: 14, padding: '10px 14px', borderRadius: 10, fontSize: 12.5,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          background: atFreeCap ? 'rgba(255,107,107,0.09)' : 'var(--surface-2)',
+          border: `1px solid ${atFreeCap ? 'rgba(255,107,107,0.3)' : 'var(--stroke)'}`,
+          color: atFreeCap ? 'var(--red)' : 'var(--text-3)',
+        }}>
+          <span>
+            {atFreeCap
+              ? `You've hit the Free plan limit of ${limits.tradesPerMonth} trades this month.`
+              : `Free plan: ${monthCount}/${limits.tradesPerMonth} trades logged this month.`}
+          </span>
+          <a href="?view=pricing" style={{
+            padding: '5px 12px', borderRadius: 8, textDecoration: 'none',
+            background: 'linear-gradient(135deg, #4c8dff, #2f6bd9)', color: '#fff',
+            fontSize: 12, fontWeight: 600,
+          }}>Upgrade</a>
+        </div>
+      )}
       {loading ? (
         <LoadingState />
       ) : (
@@ -101,9 +137,19 @@ function Journalized({ userId }) {
             {view === 'trades' && <Trades trades={trades} onAdd={openForm} onDelete={deleteTrade} onEdit={openEdit} onClearAll={clearAllTrades} brokerAccounts={brokerAccounts} />}
             {view === 'analysis' && <Analysis trades={trades} />}
             {view === 'market' && <Market />}
-            {view === 'ai-report' && <AIReport trades={trades} />}
+            {view === 'ai-report' && (
+              <PlanGate feature="ai" title="AI Reports"
+                description="AI-written performance reviews of your trading, updated on demand. Available on Pro and above.">
+                <AIReport trades={trades} />
+              </PlanGate>
+            )}
             {view === 'funded' && <Funded trades={trades} brokerAccounts={brokerAccounts.accounts} />}
-            {view === 'backtesting' && <Backtesting />}
+            {view === 'backtesting' && (
+              <PlanGate feature="backtesting" title="Backtesting"
+                description="Replay historical candles and test a strategy against your own broker's prices. Elite only.">
+                <Backtesting />
+              </PlanGate>
+            )}
             {view === 'tools' && <Tools />}
             {view === 'pricing' && <Pricing />}
             {view === 'settings' && <Settings trades={trades} onClearAll={clearAllTrades} brokerAccounts={brokerAccounts} />}
