@@ -41,6 +41,21 @@ Deno.serve(async (req) => {
     if (userErr || !userData?.user) return json({ error: 'unauthorised' }, 401)
     const userId = userData.user.id
 
+    // Plan gate: Free has no cloud connections; Pro capped at 3; Elite ∞.
+    const { data: subRow } = await svc.from('subscriptions')
+      .select('plan').eq('user_id', userId).maybeSingle()
+    const plan = subRow?.plan ?? 'free'
+    const cap = plan === 'elite' ? Infinity : plan === 'pro' ? 3 : 0
+    if (cap === 0) {
+      return json({ error: 'Cloud auto-sync requires a Pro or Elite plan.' }, 402)
+    }
+    const { count: existing } = await svc.from('broker_connections')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+    if ((existing ?? 0) >= cap) {
+      return json({ error: `Your plan allows up to ${cap} cloud connection${cap === 1 ? '' : 's'}.` }, 402)
+    }
+
     const body = await req.json().catch(() => null)
     if (!body) return json({ error: 'invalid json' }, 400)
 

@@ -57,9 +57,41 @@ export const PLANS = [
 ]
 
 export const PLAN_LIMITS = {
-  free:  { tradesPerMonth: 15, connectedAccounts: 0, ai: false, backtesting: false },
-  pro:   { tradesPerMonth: Infinity, connectedAccounts: 3, ai: true, backtesting: false },
-  elite: { tradesPerMonth: Infinity, connectedAccounts: Infinity, ai: true, backtesting: true },
+  free:  { tradesPerMonth: 15,       connectedAccounts: 0,        ai: false, backtesting: false },
+  pro:   { tradesPerMonth: Infinity, connectedAccounts: 3,        ai: true,  backtesting: false },
+  elite: { tradesPerMonth: Infinity, connectedAccounts: Infinity, ai: true,  backtesting: true  },
+}
+
+export function limitsFor(planId) {
+  return PLAN_LIMITS[planId] ?? PLAN_LIMITS.free
+}
+
+// The plan required to unlock a feature — used by <PlanGate/> to say
+// "Upgrade to Pro" or "Upgrade to Elite" with real numbers.
+export const FEATURE_MIN_PLAN = {
+  ai: 'pro',
+  metaapi: 'pro',
+  backtesting: 'elite',
+}
+
+export function requiredPlanFor(feature) {
+  return FEATURE_MIN_PLAN[feature] ?? 'pro'
+}
+
+export function hasFeature(planId, feature) {
+  const min = requiredPlanFor(feature)
+  const rank = { free: 0, pro: 1, elite: 2 }
+  return (rank[planId] ?? 0) >= (rank[min] ?? 0)
+}
+
+// How many trades the user has logged in the current calendar month —
+// drives the Free-tier 15/month cap in the UI.
+export function tradesThisMonth(trades, now = new Date()) {
+  const y = now.getFullYear(), m = now.getMonth()
+  return (trades ?? []).filter((t) => {
+    const d = new Date(t.traded_at ?? t.created_at ?? 0)
+    return d.getFullYear() === y && d.getMonth() === m
+  }).length
 }
 
 export function priceFor(plan, billing) {

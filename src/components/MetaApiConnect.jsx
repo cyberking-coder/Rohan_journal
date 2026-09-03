@@ -4,6 +4,8 @@ import {
   disconnectMetaApi,
   listMetaApiConnections,
 } from '../lib/metaApiConnections'
+import { useSubscription } from '../lib/billing'
+import { limitsFor } from '../lib/plans'
 
 // Settings → Accounts card that lets the user connect a broker account via
 // MetaApi.cloud. The MetaApi token and encryption key live server-side; the
@@ -23,6 +25,11 @@ export default function MetaApiConnect() {
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState(null)
+  const { sub } = useSubscription()
+  const limits = limitsFor(sub?.plan ?? 'free')
+  const cap = limits.connectedAccounts
+  const atCap = rows.length >= cap
+  const gated = cap === 0
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -52,8 +59,16 @@ export default function MetaApiConnect() {
             Sync a broker account from the cloud — no software to install. Uses your <strong>investor</strong> password (read-only at the broker).
           </div>
         </div>
-        {!adding && (
+        {!adding && !gated && !atCap && (
           <button onClick={() => setAdding(true)} style={primaryButton}>+ Connect</button>
+        )}
+        {!adding && gated && (
+          <a href="?view=pricing" style={{ ...primaryButton, textDecoration: 'none' }}>Upgrade to Pro</a>
+        )}
+        {!adding && !gated && atCap && (
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+            {cap === Infinity ? '' : `${cap}/${cap} connections used`}
+          </span>
         )}
       </div>
 
