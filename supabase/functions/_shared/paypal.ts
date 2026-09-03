@@ -12,8 +12,8 @@ export function paypalBase() {
 }
 
 export async function paypalToken(): Promise<string> {
-  const id = Deno.env.get('PAYPAL_CLIENT_ID')
-  const secret = Deno.env.get('PAYPAL_SECRET')
+  const id = (Deno.env.get('PAYPAL_CLIENT_ID') ?? '').trim()
+  const secret = (Deno.env.get('PAYPAL_SECRET') ?? '').trim()
   if (!id || !secret) throw new Error('PAYPAL_CLIENT_ID and PAYPAL_SECRET must be set')
 
   const resp = await fetch(`${paypalBase()}/v1/oauth2/token`, {
@@ -46,17 +46,25 @@ export async function paypal(path: string, init: RequestInit = {}, token?: strin
 }
 
 // ("pro","yearly") → env var PAYPAL_PLAN_PRO_YEARLY.
+// Env values are trimmed before use so a stray newline pasted into a
+// Supabase secret (PayPal rejects "P-XXX\n" as INVALID_PARAMETER_SYNTAX)
+// doesn't wedge the whole flow.
+function envTrim(key: string) {
+  return (Deno.env.get(key) ?? '').trim()
+}
+
 export function planIdFor(plan: string, billing: string) {
   const key = `PAYPAL_PLAN_${plan.toUpperCase()}_${billing.toUpperCase()}`
-  const id = Deno.env.get(key)
+  const id = envTrim(key)
   if (!id) throw new Error(`${key} is not set`)
   return id
 }
 
 export function planFromPayPalId(planId: string): { plan: string; billing: string } | null {
+  const needle = planId.trim()
   for (const plan of ['pro', 'elite']) {
     for (const billing of ['monthly', 'yearly']) {
-      if (Deno.env.get(`PAYPAL_PLAN_${plan.toUpperCase()}_${billing.toUpperCase()}`) === planId) {
+      if (envTrim(`PAYPAL_PLAN_${plan.toUpperCase()}_${billing.toUpperCase()}`) === needle) {
         return { plan, billing }
       }
     }
