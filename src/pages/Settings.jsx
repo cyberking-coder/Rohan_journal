@@ -7,6 +7,7 @@ import ShareLinks from '../components/ShareLinks'
 import { usePrefs } from '../lib/theme'
 import { useQueryParam } from '../lib/router'
 import BrokerAccounts from '../components/BrokerAccounts'
+import MetaApiConnect from '../components/MetaApiConnect'
 import {
   CURRENCIES, CURRENCY_KEYS, TIMEZONE_GROUPS, formatMoney,
   resolveTimezone, timezoneCity, timezoneOffsetLabel,
@@ -181,6 +182,8 @@ function AccountsTab({ trades, brokerAccounts }) {
         onUpdate={updateAccount}
         onRemove={removeAccount}
       />
+
+      <MetaApiConnect />
 
       <Note>
         Syncing runs from <span className="mono">mt5_bridge/</span> on your own machine, pushing
