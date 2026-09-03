@@ -79,6 +79,13 @@ export const VIEWS = [
     description: 'Position size calculator, market hours and more.',
   },
   {
+    key: 'pricing',
+    label: 'Pricing',
+    icon: '＄',
+    ready: true,
+    description: 'Free, Pro and Elite plans — cloud sync, AI reports and more.',
+  },
+  {
     key: 'settings',
     label: 'Settings',
     icon: '◍',
