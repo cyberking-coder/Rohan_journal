@@ -22,9 +22,8 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - run: python import_events.py --provider apify
+      - run: python import_events.py --provider jblanked
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
-          APIFY_CALENDAR_TZ: UTC
+          JBLANKED_API_KEY: ${{ secrets.JBLANKED_API_KEY }}

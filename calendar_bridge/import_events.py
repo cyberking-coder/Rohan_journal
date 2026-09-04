@@ -128,7 +128,15 @@ def _apify(days, dump=False, dataset=None):
     return fetch(days, dump=dump, dataset_id=dataset)
 
 
-ADAPTERS = {"apify": _apify}
+def _jblanked(days, dump=False, dataset=None):
+    # jBlanked News API — hosted ForexFactory calendar, UTC timestamps,
+    # free tier covers the today / week endpoints. Needs JBLANKED_API_KEY.
+    _ = dataset  # not applicable
+    from jblanked import fetch
+    return fetch(days, dump=dump)
+
+
+ADAPTERS = {"apify": _apify, "jblanked": _jblanked}
 
 
 def load_from_file(path):
