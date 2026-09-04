@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PageHeader } from '../components/common'
+import ConnectBrokerModal from '../components/ConnectBrokerModal'
 import TradeHistoryTable from '../components/TradeHistoryTable'
 import { accountSummary } from '../lib/accounts'
 import {
@@ -15,6 +16,7 @@ export default function Trades({ trades, onAdd, onDelete, onEdit, onClearAll, br
   const [side, setSide] = useState('All')
   const [query, setQuery] = useState('')
   const [confirmClear, setConfirmClear] = useState(false)
+  const [connecting, setConnecting] = useState(false)
 
   const registered = brokerAccounts?.accounts ?? []
   const accounts = useMemo(() => combineAccounts(registered, trades), [registered, trades])
@@ -34,6 +36,14 @@ export default function Trades({ trades, onAdd, onDelete, onEdit, onClearAll, br
     <>
       <PageHeader eyebrow="Portfolio" title="Trades">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={() => setConnecting(true)}
+            style={{
+              padding: '10px 16px', borderRadius: 11, fontWeight: 600, fontSize: 13.5,
+              background: 'var(--card-2)', border: '1px solid var(--stroke)', color: 'var(--text)',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}>
+            <span aria-hidden>⚡</span> Sync my MT5
+          </button>
           <button onClick={onAdd}
             style={{
               padding: '10px 18px', borderRadius: 11, fontWeight: 600, fontSize: 14,
@@ -41,6 +51,8 @@ export default function Trades({ trades, onAdd, onDelete, onEdit, onClearAll, br
             }}>+ Add Trade</button>
         </div>
       </PageHeader>
+
+      <ConnectBrokerModal open={connecting} onClose={() => setConnecting(false)} />
 
       {/* Account switcher */}
       <div className="card" style={{ padding: 16, marginBottom: 14 }}>
