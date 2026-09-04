@@ -108,15 +108,16 @@ def fetch(days=14, dump=False, dataset_id=None):
     _ = dataset_id  # not applicable
 
     items = []
-    items.extend(_get("/forex-factory/calendar/today/") or [])
-    items.extend(_get("/forex-factory/calendar/week/") or [])
-    if days > 7:
-        # Optional: the "next week" endpoint isn't on the free tier for every
-        # account. If it 402/403s we ignore it and fall back to what we have.
-        try:
-            items.extend(_get("/forex-factory/calendar/next-week/") or [])
-        except SystemExit:
-            pass
+    # jBlanked's public paths live under /list/. today + week covers the
+    # window our Market page reads (±14 days). The last-N endpoint fills in
+    # any releases that already happened earlier this week.
+    items.extend(_get("/list/today/") or [])
+    items.extend(_get("/list/week/") or [])
+    try:
+        items.extend(_get("/list/last/100/") or [])
+    except SystemExit:
+        # Optional endpoint; free tier may not include it.
+        pass
 
     if dump and items:
         print("[jblanked] first record verbatim:")
