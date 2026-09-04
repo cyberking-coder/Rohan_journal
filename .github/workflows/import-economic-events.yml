@@ -2,7 +2,9 @@ name: Import economic events
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
+    # jBlanked free tier caps at 1 request/day — one call per day covers
+    # the ±14-day window via the /calendar/range/ endpoint.
+    - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:
