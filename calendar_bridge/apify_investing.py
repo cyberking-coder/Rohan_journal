@@ -332,14 +332,17 @@ def fetch(days=14, dump=False, dataset_id=None):
         "importances": os.environ.get("APIFY_IMPORTANCES", ""),
         "categories": os.environ.get("APIFY_CATEGORIES", ""),
         "country": os.environ.get("APIFY_COUNTRY", ""),
-        # The actor now requires a positive maxResults / maxCharge — a run
-        # that leaves it unset is rejected with "Maximum charged results
-        # must be greater than zero". 500 is plenty for a fortnight of
-        # global releases and cheap on the pay-per-result meter.
-        "maxResults": int(os.environ.get("APIFY_MAX_RESULTS", "500")),
     }
 
-    run = client.actor(ACTOR).call(run_input=run_input)
+    # The actor is on Apify's pay-per-result plan and refuses to start
+    # unless the run has a positive charge cap. That cap is a run-level
+    # setting (`max_items`), not part of run_input — passing it inside
+    # run_input has no effect and the actor still errors with "Maximum
+    # charged results must be greater than zero". 500 covers a fortnight
+    # of global releases cheaply; override with APIFY_MAX_RESULTS.
+    max_items = int(os.environ.get("APIFY_MAX_RESULTS", "500"))
+
+    run = client.actor(ACTOR).call(run_input=run_input, max_items=max_items)
 
     # apify-client 3.x returns a `Run` object with snake_case attributes;
     # 1.x returned a plain dict with the camelCase wire names. Both are

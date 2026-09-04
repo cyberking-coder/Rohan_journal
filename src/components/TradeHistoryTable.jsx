@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { net } from '../lib/stats'
 import Money, { Amount } from './Money'
 import { closeTime, openTime } from '../lib/analytics'
@@ -7,11 +7,13 @@ import { isSynced, sourceLabel, tradeSummaryText } from '../lib/accounts'
 import { usePrefs } from '../lib/theme'
 import { formatDateTime } from '../lib/format'
 import { TagRow } from './TagPicker'
+import { screenshotSrc } from '../lib/storage'
 
 // The Trades page history table, laid out per the spec: stacked open/close
 // timestamps, direction badge, prices, size, P&L, source, and row actions.
 export default function TradeHistoryTable({ trades, onDelete, onEdit, unit = 'money' }) {
   const [copiedId, setCopiedId] = useState(null)
+  const [lightbox, setLightbox] = useState(null)
   // Timestamps render in the user's chosen timezone (Settings -> Timezone).
   const { timezone } = usePrefs()
 
@@ -108,8 +110,14 @@ export default function TradeHistoryTable({ trades, onDelete, onEdit, unit = 'mo
                       title={copiedId === t.id ? 'Copied' : 'Copy trade summary'}>
                       {copiedId === t.id ? '✓' : '⇗'}
                     </IconAction>
-                    {onEdit && !synced && (
-                      <IconAction onClick={() => onEdit(t)} title="Edit">✎</IconAction>
+                    {t.screenshot_url && (
+                      <IconAction onClick={() => setLightbox(t.screenshot_url)} title="View chart">🖼</IconAction>
+                    )}
+                    {onEdit && (
+                      <IconAction onClick={() => onEdit(t)}
+                        title={synced ? 'Edit — screenshot & notes safe to update; numeric fields may be overwritten on next sync' : 'Edit'}>
+                        ✎
+                      </IconAction>
                     )}
                     {onDelete && (
                       <IconAction
@@ -125,7 +133,58 @@ export default function TradeHistoryTable({ trades, onDelete, onEdit, unit = 'mo
           })}
         </tbody>
       </table>
+      <Lightbox src={lightbox} onClose={() => setLightbox(null)} />
     </div>
+  )
+}
+
+// Lightbox: resolves a signed URL from the stored path each time it opens
+// (signed URLs expire after an hour, so a stale one from a long-open tab
+// would otherwise 404). Escape or click outside to close.
+function Lightbox({ src, onClose }) {
+  const [resolved, setResolved] = useState(null)
+  const [err, setErr] = useState(null)
+
+  useEffect(() => {
+    if (!src) { setResolved(null); setErr(null); return }
+    let cancelled = false
+    screenshotSrc(src)
+      .then((s) => { if (!cancelled) { setResolved(s); setErr(s ? null : 'Screenshot not available') } })
+      .catch((e) => { if (!cancelled) setErr(String(e?.message ?? e)) })
+    return () => { cancelled = true }
+  }, [src])
+
+  useEffect(() => {
+    if (!src) return
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [src, onClose])
+
+  return (
+    <AnimatePresence>
+      {src && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          onClick={onClose}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.86)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+          }}
+        >
+          {err ? (
+            <div style={{ color: 'var(--text-2)', fontSize: 13, textAlign: 'center' }}>
+              {err}
+            </div>
+          ) : resolved ? (
+            <img src={resolved} alt="Trade screenshot" onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: '95vw', maxHeight: '92vh', borderRadius: 10, boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }} />
+          ) : (
+            <div style={{ color: 'var(--text-3)', fontSize: 13 }}>Loading…</div>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
