@@ -19,7 +19,7 @@ import urllib.request
 import urllib.error
 import json
 
-BASE = "https://www.jblanked.com/news/api"
+BASE = "https://www.jblanked.com/news/api/"
 
 # How impact strengths in the feed map to our own three-tier scale.
 IMPACT_MAP = {
