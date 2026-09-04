@@ -61,14 +61,39 @@ def _get(path):
         raise SystemExit(f"jblanked {e.code} at {path}: {detail}")
 
 
+def _resolve_tz(name):
+    """Accept either an IANA zone (America/New_York) or a fixed offset
+    written as 'UTC+3' / 'UTC-5' / 'GMT+2'. The latter is the safest choice
+    for broker-time feeds because MT4/MT5 server clocks don't observe DST
+    the way an IANA zone would."""
+    s = (name or "").strip()
+    m = None
+    for prefix in ("UTC", "GMT"):
+        if s.upper().startswith(prefix):
+            rest = s[len(prefix):]
+            if not rest:
+                return timezone.utc
+            try:
+                hours = int(rest)
+                return timezone(timedelta(hours=hours))
+            except ValueError:
+                pass
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(s)
+    except Exception:
+        return timezone.utc
+
+
 def _parse_time(value):
     """Return an ISO 8601 UTC string for whatever the feed hands us.
 
     The feed's Date field looks like '2024.02.08 15:30:00' and doesn't
-    include a timezone. jBlanked publishes these in EST — noted in their
-    library docs ('EST = 7' in the offset guide) — so we localise to
-    America/New_York before converting to UTC. Override with
-    JBLANKED_CALENDAR_TZ if a future account is set to a different zone.
+    include a timezone. jBlanked's default is broker server time — the
+    MQL library docs call this "offset 0 = GMT-3", meaning raw stamps
+    read as UTC+3 (a typical MT4/MT5 server clock). Override with
+    JBLANKED_CALENDAR_TZ ('UTC+2', 'UTC-5', 'America/New_York', …) if
+    your account is configured differently.
     """
     if not value:
         return None
@@ -86,12 +111,8 @@ def _parse_time(value):
     if dt.tzinfo is not None:
         return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
-    tz_name = os.environ.get("JBLANKED_CALENDAR_TZ", "America/New_York")
-    try:
-        from zoneinfo import ZoneInfo
-        dt = dt.replace(tzinfo=ZoneInfo(tz_name))
-    except Exception:
-        dt = dt.replace(tzinfo=timezone.utc)
+    tz = _resolve_tz(os.environ.get("JBLANKED_CALENDAR_TZ", "UTC+3"))
+    dt = dt.replace(tzinfo=tz)
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
@@ -107,7 +128,10 @@ def _normalise(item):
         "actual": item.get("Actual") or item.get("actual"),
         "forecast": item.get("Forecast") or item.get("forecast"),
         "previous": item.get("Previous") or item.get("previous"),
-        "external_id": f"{item.get('Currency','')}:{event_at}:{item.get('Name','')}",
+        # Key on currency + calendar day + title rather than the full
+        # timestamp, so a re-import with a corrected time updates the same
+        # row instead of creating a duplicate.
+        "external_id": f"{item.get('Currency','')}:{(event_at or '')[:10]}:{item.get('Name','')}",
         "source": "jblanked",
     }
 
